@@ -269,7 +269,7 @@ function drawFace(ctx, expr) {
 }
 
 // ---------- 4D pocket on the belly ----------
-const BELLY_R = new THREE.Vector3(0.36, 0.36, 0.27);
+const BELLY_R = new THREE.Vector3(0.44, 0.4, 0.29);
 function drawBelly(ctx, w, h) {
   const bx = x => (x / BELLY_R.x * 0.5 + 0.5) * w;
   const by = y => (0.5 - y / BELLY_R.y * 0.5) * h;
@@ -515,36 +515,36 @@ export function createMascot() {
 
   // Body: blue ball, white belly with the 4D pocket painted on.
   const torso = part(new THREE.SphereGeometry(0.45, 36, 26), BLUE);
-  torso.scale.set(1, 0.95, 0.92);
+  torso.scale.set(1.18, 0.98, 1.05); // chubby, wider than tall
   torso.position.y = 0.52;
   const bellyTex = canvasTexture(512, 512, drawBelly);
   const belly = part(planarUV(ellipsoid(BELLY_R), -BELLY_R.x, BELLY_R.x, -BELLY_R.y, BELLY_R.y), WHITE, {
     outline: 0, map: bellyTex, emissive: 0xffffff, emissiveMap: bellyTex, emissiveIntensity: 0.15,
   });
-  belly.position.set(0, 0.5, 0.17);
-  const POCKET = new THREE.Vector3(0, 0.4, 0.45);
+  belly.position.set(0, 0.49, 0.21);
+  const POCKET = new THREE.Vector3(0, 0.4, 0.5);
   body.add(torso, belly);
 
   // Red collar with the golden bell.
-  const collar = part(new THREE.TorusGeometry(0.305, 0.064, 14, 48), RED, { outline: 0.05 });
+  const collar = part(new THREE.TorusGeometry(0.37, 0.066, 14, 56), RED, { outline: 0.05 });
   collar.rotation.x = Math.PI / 2;
-  collar.scale.set(1, 0.93, 1);
+  collar.scale.set(1, 0.92, 1);
   // The collar and bell sit on a neck pivot that follows the head tilt, so the band never pokes out.
   const neck = new THREE.Group();
   neck.position.y = 0.83;
   const bell = createBell();
   const bellPivot = new THREE.Group();
-  bellPivot.position.set(0, -0.01, 0.32);
+  bellPivot.position.set(0, -0.01, 0.37);
   bell.position.set(0, -0.07, 0.07);
   bellPivot.add(bell);
   neck.add(collar, bellPivot);
   body.add(neck);
 
   // Short legs and flat round white feet.
-  for (const x of [-0.19, 0.19]) {
-    const leg = part(new THREE.SphereGeometry(0.15, 16, 12), BLUE, { outline: 0.04 });
+  for (const x of [-0.23, 0.23]) {
+    const leg = part(new THREE.SphereGeometry(0.17, 16, 12), BLUE, { outline: 0.04 });
     leg.position.set(x, 0.17, 0.0);
-    const foot = part(new THREE.SphereGeometry(0.16, 20, 14), WHITE, { outline: 0.06 });
+    const foot = part(new THREE.SphereGeometry(0.18, 20, 14), WHITE, { outline: 0.06 });
     foot.scale.set(1.12, 0.5, 1.3);
     foot.position.set(x * 1.05, 0.075, 0.06);
     body.add(leg, foot);
@@ -552,7 +552,7 @@ export function createMascot() {
 
   // Red ball tail on a thin stem.
   const tail = new THREE.Group();
-  tail.position.set(0, 0.3, -0.36);
+  tail.position.set(0, 0.3, -0.44);
   const stem = part(new THREE.CylinderGeometry(0.014, 0.014, 0.12, 8), DARK, { outline: 0 });
   stem.rotation.x = Math.PI / 2 + 0.4;
   stem.position.set(0, -0.02, -0.05);
@@ -564,12 +564,12 @@ export function createMascot() {
   // Arms: stubby blue arms ending in round white hands (no fingers).
   function arm(side) {
     const g = new THREE.Group();
-    g.position.set(0.36 * side, 0.7, 0.02);
+    g.position.set(0.45 * side, 0.7, 0.02);
     const hang = new THREE.Group();
     hang.rotation.z = side * 0.5;
-    const limb = part(new THREE.CapsuleGeometry(0.095, 0.17, 6, 16), BLUE);
+    const limb = part(new THREE.CapsuleGeometry(0.11, 0.16, 6, 16), BLUE);
     limb.position.y = -0.14;
-    const hand = part(new THREE.SphereGeometry(0.115, 18, 14), WHITE);
+    const hand = part(new THREE.SphereGeometry(0.13, 18, 14), WHITE);
     hand.position.y = -0.33;
     hang.add(limb, hand);
     g.add(hang);
@@ -628,7 +628,7 @@ export function createMascot() {
   // Invisible hitbox for clicks.
   const hitbox = new THREE.Mesh(new THREE.SphereGeometry(0.95, 12, 8), new THREE.MeshBasicMaterial());
   hitbox.position.y = 1.05;
-  hitbox.scale.set(1, 1.25, 1);
+  hitbox.scale.set(1.1, 1.25, 1.1);
   hitbox.visible = false;
   group.add(hitbox);
 

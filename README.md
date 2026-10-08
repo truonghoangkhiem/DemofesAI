@@ -67,6 +67,13 @@ have `GEMINI_MODEL`) if you want to tune it live. Files saved as UTF-8 with or w
 
 The JSON output format is fixed in code (`RESPONSE_SCHEMA` in `lib/rubric.js`) because the UI depends on it.
 
+## Theme music (optional)
+
+The app plays a generated soundtrack by default. To use your own theme song instead (for example
+the Doraemon theme for an internal demo), put the audio file at `public/audio/theme.mp3` and reload
+the page. The file is git-ignored on purpose: copyrighted music must not be committed or published.
+The **Music** button still turns it on and off.
+
 ## Demo flow
 
 1. Type a vague prompt such as `Write a blog post about AI` and press **Evaluate**.

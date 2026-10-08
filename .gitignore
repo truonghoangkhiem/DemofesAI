@@ -24,3 +24,7 @@ Thumbs.db
 coverage/
 screenshots/
 tmp/
+
+# Theme song you add yourself (copyrighted music must not be published)
+public/audio/*
+!public/audio/.gitkeep

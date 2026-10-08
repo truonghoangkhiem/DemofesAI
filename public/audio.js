@@ -285,9 +285,48 @@ function scheduler() {
   }
 }
 
+// Optional theme song: drop an audio file at public/audio/theme.mp3 (not committed) and it loops
+// instead of the procedural soundtrack. Without the file, the generated music plays as before.
+const THEME_URL = 'audio/theme.mp3';
+let theme = null; // { el: HTMLAudioElement } once the file is known to exist
+let themeCheck = null;
+
+function findTheme() {
+  themeCheck ??= fetch(THEME_URL, { method: 'HEAD' })
+    .then(res => {
+      if (!res.ok || !/^audio\//.test(res.headers.get('content-type') || '')) return null;
+      const el = new Audio(THEME_URL);
+      el.loop = true;
+      el.preload = 'auto';
+      ctx.createMediaElementSource(el).connect(musicGain);
+      theme = { el };
+      return theme;
+    })
+    .catch(() => null);
+  return themeCheck;
+}
+
+let musicWanted = false;
+
 function startMusic() {
   const c = getContext();
-  if (!c || musicTimer) return;
+  if (!c || musicWanted) return;
+  musicWanted = true;
+  findTheme().then(found => {
+    if (!musicWanted) return;
+    if (found) {
+      musicFilter.frequency.setTargetAtTime(18000, c.currentTime, 0.1); // the recording needs no muffling
+      musicGain.gain.cancelScheduledValues(c.currentTime);
+      musicGain.gain.setTargetAtTime(MUSIC_LEVEL, c.currentTime, 0.6);
+      found.el.play().catch(() => {});
+    } else {
+      startGeneratedMusic(c);
+    }
+  });
+}
+
+function startGeneratedMusic(c) {
+  if (musicTimer) return;
   nextTime = c.currentTime + 0.1;
   step = 0;
   motif = [];
@@ -298,9 +337,11 @@ function startMusic() {
 }
 
 function stopMusic() {
-  if (!ctx || !musicTimer) return;
+  if (!ctx || !musicWanted) return;
+  musicWanted = false;
   musicGain.gain.cancelScheduledValues(ctx.currentTime);
   musicGain.gain.setTargetAtTime(0, ctx.currentTime, 0.25);
+  if (theme) setTimeout(() => !musicWanted && theme.el.pause(), 800);
   clearInterval(musicTimer);
   musicTimer = null;
 }
@@ -310,7 +351,7 @@ export function setMusicMood(name) {
   if (next === mood) return;
   mood = next;
   motif = []; // new feeling, new tune
-  if (ctx) musicFilter.frequency.setTargetAtTime(mood.bright, ctx.currentTime, 0.8);
+  if (ctx && !theme) musicFilter.frequency.setTargetAtTime(mood.bright, ctx.currentTime, 0.8);
 }
 
 // Pull the soundtrack down so a fanfare can shine.
