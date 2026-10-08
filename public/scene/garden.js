@@ -613,7 +613,7 @@ function glowPointsMaterial(vertexShader, uniforms = {}) {
   });
 }
 
-// Kitsunebi: drifting spirit orbs animated entirely on the GPU.
+// Drifting spirit orbs (fireflies) animated entirely on the GPU.
 function createSpiritOrbs() {
   const rand = rng(55);
   const COUNT = 140;

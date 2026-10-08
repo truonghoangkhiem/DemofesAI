@@ -376,7 +376,8 @@ body.cinema-mode .topbar { right: 18px; }
   display: grid;
   place-items: center;
   border-radius: 50%;
-  background: linear-gradient(135deg, #ffb37a, #ff7a3d);
+  background: linear-gradient(135deg, #7fd3ff, #1ea0e8);
+  box-shadow: inset 0 0 0 2px #e8282f;
   font-size: 15px;
 }
 @keyframes floatSubtle {

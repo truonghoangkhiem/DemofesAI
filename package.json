@@ -2,7 +2,7 @@
   "name": "prompt-sensei",
   "version": "1.0.0",
   "private": true,
-  "description": "Workshop demo: Gemini scores and improves your prompt, with a 3D kitsune sensei.",
+  "description": "Workshop demo: Gemini scores and improves your prompt, with a 3D Doraemon sensei.",
   "type": "module",
   "engines": {
     "node": ">=20"

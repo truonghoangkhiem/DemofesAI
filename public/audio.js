@@ -443,7 +443,7 @@ export function playSparkle(count = 5) {
   }
 }
 
-// Kitsune "kyu!" when the mascot is petted, then a little sparkle.
+// A cheerful robot-cat chirp when Doraemon is petted, then a little sparkle.
 export function playPet() {
   const t = sfx();
   if (t === null) return;
