@@ -1,0 +1,12 @@
+{
+  "model": "gemini-3.8-flash",
+  "thinkingLevel": "low",
+  "timeoutSeconds": 90,
+  "evaluate": {
+    "temperature": 0.2,
+    "topP": 0.95
+  },
+  "tryIt": {
+    "temperature": 1.0
+  }
+}

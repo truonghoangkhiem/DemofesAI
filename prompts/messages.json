@@ -1,0 +1,6 @@
+{
+  "answeredIntro": "The user answered your clarifying questions:",
+  "skipped": "The user chose to skip the clarifying questions.",
+  "mustEvaluate": "The clarification round is over: you MUST return status \"evaluated\". Where information is still missing, make reasonable assumptions and mention them in the feedback.",
+  "insist": "Reminder: status \"needs_clarification\" is not allowed for this request."
+}

@@ -1,18 +1,29 @@
 import 'dotenv/config';
 import { createApp, MISSING_KEY_MESSAGE } from './lib/app.js';
 import { createGemini, createGoogleClient } from './lib/gemini.js';
+import { activeEnvOverrides, createSettingsLoader, SettingsError } from './lib/settings.js';
 
 const apiKey = process.env.GEMINI_API_KEY?.trim();
-const model = process.env.GEMINI_MODEL?.trim() || 'gemini-flash-latest';
 const port = Number(process.env.PORT) || 3000;
-const timeoutMs = (Number(process.env.GEMINI_TIMEOUT_SECONDS) || 90) * 1000;
-// "low" is fast; "none" sends no thinking config (for models without thinking levels).
-const thinkingSetting = process.env.GEMINI_THINKING_LEVEL?.trim().toLowerCase() || 'low';
-const thinkingLevel = thinkingSetting === 'none' ? null : thinkingSetting;
+
+// Model, thinking level, timeout and generation parameters live in config/llm.json; prompts in prompts/.
+const settings = createSettingsLoader();
+let current;
+try {
+  current = settings.get();
+} catch (err) {
+  if (!(err instanceof SettingsError)) throw err;
+  console.error(`Error: ${err.message}`);
+  process.exit(1);
+}
 
 if (!apiKey) console.warn(`Warning: ${MISSING_KEY_MESSAGE}`);
-const gemini = apiKey ? createGemini({ ...createGoogleClient(apiKey), model, timeoutMs, thinkingLevel }) : null;
+const gemini = apiKey ? createGemini({ ...createGoogleClient(apiKey), getSettings: settings.get }) : null;
 
 createApp({ gemini }).listen(port, () => {
-  console.log(`Prompt Sensei is running at http://localhost:${port} (model: ${model}, thinking: ${thinkingSetting})`);
+  console.log(`Prompt Sensei is running at http://localhost:${port}`);
+  for (const [name, setting] of activeEnvOverrides()) {
+    console.warn(`Note: ${name} in .env overrides "${setting}" in config/llm.json (remove it from .env to tune it in the file).`);
+  }
+  console.log(`Model: ${current.model} · thinking: ${current.thinkingLevel ?? 'none'} · edit config/llm.json and prompts/ to tune (no restart needed)`);
 });

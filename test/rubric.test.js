@@ -1,9 +1,13 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  CRITERIA, MAX_PROMPT_CHARS, SYSTEM_INSTRUCTION, RESPONSE_SCHEMA,
+  CRITERIA, MAX_PROMPT_CHARS, RESPONSE_SCHEMA,
   InvalidResponseError, buildEvaluationContents, parseJsonText, normalizeEvaluation,
 } from '../lib/rubric.js';
+import { createSettingsLoader } from '../lib/settings.js';
+
+// The shipped prompt files, so these tests also guard against breaking them.
+const { systemInstruction: SYSTEM_INSTRUCTION, messages } = createSettingsLoader({ env: {} }).get();
 
 const fullCriteria = (score = 5) => CRITERIA.map(c => ({ id: c.id, score, feedback: `fb ${c.id}` }));
 
@@ -44,7 +48,7 @@ test('buildEvaluationContents includes answered clarifications and forces evalua
   const contents = buildEvaluationContents('Write a post', [
     { question: 'Who is the audience?', answer: 'Beginners' },
     { question: 'How long?', answer: '' },
-  ]);
+  ], { messages });
   assert.match(contents, /<clarifications>/);
   assert.match(contents, /Q: Who is the audience\?\nA: Beginners/);
   assert.doesNotMatch(contents, /How long\?/);
@@ -52,7 +56,7 @@ test('buildEvaluationContents includes answered clarifications and forces evalua
 });
 
 test('buildEvaluationContents treats empty clarifications as skipped, and insist adds a reminder', () => {
-  const contents = buildEvaluationContents('Write a post', [], { insist: true });
+  const contents = buildEvaluationContents('Write a post', [], { insist: true, messages });
   assert.match(contents, /chose to skip/);
   assert.match(contents, /MUST return status "evaluated"/);
   assert.match(contents, /not allowed/);
