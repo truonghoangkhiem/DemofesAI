@@ -1,1 +1,110 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Prompt Sensei</title></head><body>Prompt Sensei</body></html>
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Prompt Sensei</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@500;800&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.186.1/build/three.module.js",
+        "marked": "https://cdn.jsdelivr.net/npm/marked@18.1.0/lib/marked.esm.js",
+        "dompurify": "https://cdn.jsdelivr.net/npm/dompurify@3.4.16/dist/purify.es.mjs"
+      }
+    }
+  </script>
+</head>
+<body>
+  <canvas id="scene" aria-hidden="true"></canvas>
+
+  <header class="brand">
+    <span class="brand-mark" aria-hidden="true">先</span>
+    <div>
+      <h1>Prompt Sensei</h1>
+      <p>Your prompt-writing coach</p>
+    </div>
+  </header>
+
+  <main class="panel" id="panel">
+    <p class="status" id="status" role="status" hidden><span class="spinner" aria-hidden="true"></span><span id="status-text">Sensei is thinking…</span></p>
+
+    <section data-view="input">
+      <h2>Write your prompt</h2>
+      <p class="hint">Sensei scores it with the 3C rule (Concise · Clear · Consistent) and the Role · Task · Context · Format framework.</p>
+      <label for="prompt-input" class="sr-only">Your prompt</label>
+      <textarea id="prompt-input" maxlength="4000" rows="9" placeholder="e.g. Write a blog post about AI"></textarea>
+      <div class="row">
+        <span id="char-count" class="muted">0 / 4000</span>
+        <button id="evaluate-btn" class="btn primary" type="button">Evaluate <kbd>Ctrl+Enter</kbd></button>
+      </div>
+    </section>
+
+    <section data-view="clarify" hidden>
+      <h2>Sensei has a few questions</h2>
+      <p id="clarify-reason" class="bubble"></p>
+      <form id="clarify-form">
+        <ol id="clarify-list"></ol>
+        <div class="row">
+          <button type="button" id="skip-btn" class="btn ghost">Skip &amp; score anyway</button>
+          <button type="submit" class="btn primary">Submit answers</button>
+        </div>
+      </form>
+    </section>
+
+    <section data-view="result" hidden>
+      <div class="score-head">
+        <div class="hanko" id="overall-score" aria-label="Overall score">0</div>
+        <div>
+          <h2 id="score-title">Score</h2>
+          <p id="score-subtitle" class="muted"></p>
+        </div>
+      </div>
+      <h3>Rubric</h3>
+      <ul id="criteria-list" class="criteria"></ul>
+      <h3>What you did well</h3>
+      <ul id="strengths-list" class="bullets"></ul>
+      <h3>Sensei's tips</h3>
+      <ul id="tips-list" class="bullets"></ul>
+      <h3>Improved prompt</h3>
+      <pre id="improved-prompt" class="prompt-box"></pre>
+      <div class="row wrap">
+        <button id="copy-btn" class="btn ghost" type="button">Copy</button>
+        <button id="use-btn" class="btn ghost" type="button">Use this</button>
+        <button id="try-btn" class="btn primary" type="button">Try it</button>
+      </div>
+      <button class="btn link restart" type="button">Start over</button>
+    </section>
+
+    <section data-view="compare" hidden>
+      <h2>Same AI, two prompts</h2>
+      <div class="compare">
+        <article class="column">
+          <h3>Original prompt</h3>
+          <details><summary>Show prompt</summary><pre id="compare-original-prompt" class="prompt-box"></pre></details>
+          <div id="compare-original" class="answer"></div>
+        </article>
+        <article class="column improved">
+          <h3>Improved prompt</h3>
+          <details><summary>Show prompt</summary><pre id="compare-improved-prompt" class="prompt-box"></pre></details>
+          <div id="compare-improved" class="answer"></div>
+        </article>
+      </div>
+      <div class="row">
+        <button id="back-btn" class="btn ghost" type="button">Back to result</button>
+        <button class="btn link restart" type="button">Start over</button>
+      </div>
+    </section>
+  </main>
+
+  <div id="toast" class="toast" role="alert" hidden>
+    <span id="toast-text"></span>
+    <button id="toast-close" type="button" aria-label="Dismiss">×</button>
+  </div>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>
