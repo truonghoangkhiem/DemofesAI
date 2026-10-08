@@ -98,7 +98,7 @@ test('normalizeEvaluation clamps scores, fills missing, drops unknown, recompute
   assert.equal(by.role_task.score, 8);
   assert.equal(by.role_task.feedback, 'rounded');
   assert.equal(by.timeframe.score, 0);
-  assert.equal(by.timeframe.feedback, 'Not assessed.');
+  assert.equal(by.timeframe.feedback, ''); // the browser shows a translated "not assessed"
   assert.equal(by.timeframe.name, 'Timeframe & Freshness');
   assert.equal(by.timeframe.max, 5);
   assert.equal(result.overall, 15 + 0 + 4 + 8);

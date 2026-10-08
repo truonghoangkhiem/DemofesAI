@@ -2,6 +2,7 @@
 import * as THREE from 'three';
 import { DecalGeometry } from 'three/addons/geometries/DecalGeometry.js';
 import { part, toon, canvasTexture, getGlowTexture } from './toon.js';
+import { t, isLang, DEFAULT_LANG } from '../i18n.js';
 
 const ORANGE = 0xff9443;
 const CREAM = 0xfff4e6;
@@ -9,6 +10,8 @@ const DARK = 0x2a1a2e;
 const RED = 0xe8283f;
 const GOLD = 0xffc83b;
 const WOOD_DARK = 0x8a542b;
+// Rounded Japanese font after the Latin ones so kana and kanji do not fall back to a system font.
+const EMOTE_FONT = '"Baloo 2", "Be Vietnam Pro", "M PLUS Rounded 1c", sans-serif';
 
 const POSES = {
   idle: { tilt: 0, pitch: 0, yaw: 0, ear: 0, armL: 0, armR: 0 },
@@ -19,24 +22,16 @@ const POSES = {
   sad: { tilt: -0.08, pitch: 0.24, yaw: 0, ear: 0.9, armL: -0.2, armR: -0.2 },
 };
 
-const EMOTES = {
-  vi: {
-    thinking: ['Hmm…', 'Đang phân tích', '#3aa9d8'],
-    confused: ['Ể?!', 'Cần làm rõ thêm', '#9a5cf0'],
-    happy: ['Sugoi!', 'Tuyệt vời!', '#ff4f8b'],
-    neutral: ['Ổn đấy!', 'Còn nâng cấp được', '#2fae7c'],
-    sad: ['Cố lên!', 'Thử lại nhé', '#5a72e0'],
-    pet: ['Ganbatte!', 'Sensei ủng hộ bạn', '#ff4f8b'],
-  },
-  en: {
-    thinking: ['Hmm…', 'Analyzing', '#3aa9d8'],
-    confused: ['Eh?!', 'Need details', '#9a5cf0'],
-    happy: ['Sugoi!', 'Amazing!', '#ff4f8b'],
-    neutral: ['Not bad!', 'Room to level up', '#2fae7c'],
-    sad: ['Keep going!', 'Try again', '#5a72e0'],
-    pet: ['Ganbatte!', 'Sensei believes in you', '#ff4f8b'],
-  },
+// Speech-bubble accent colour per mood; the text comes from the shared dictionary (public/i18n.js).
+const EMOTE_COLORS = {
+  thinking: '#3aa9d8',
+  confused: '#9a5cf0',
+  happy: '#ff4f8b',
+  neutral: '#2fae7c',
+  sad: '#5a72e0',
+  pet: '#ff4f8b',
 };
+const emoteFor = (lang, key) => [t(lang, `emote.${key}.title`), t(lang, `emote.${key}.sub`), EMOTE_COLORS[key]];
 
 const RANKS = [
   { min: 90, letter: 'S', a: '#fff3a8', b: '#ffb21e', ray: [3, 2.3, 0.9] },
@@ -316,15 +311,16 @@ function createEmote() {
     // Text.
     ctx.textAlign = 'left';
     ctx.textBaseline = 'middle';
-    ctx.font = '800 64px "Baloo 2", "Be Vietnam Pro", sans-serif';
+    // maxWidth squeezes long lines (e.g. Japanese) so they stay inside the bubble.
+    ctx.font = `800 64px ${EMOTE_FONT}`;
     ctx.lineWidth = 8;
     ctx.strokeStyle = '#2a1a2e';
-    ctx.strokeText(title, 90, 88);
+    ctx.strokeText(title, 90, 88, 360);
     ctx.fillStyle = color;
-    ctx.fillText(title, 90, 88);
-    ctx.font = '700 32px "Be Vietnam Pro", sans-serif';
+    ctx.fillText(title, 90, 88, 360);
+    ctx.font = `700 32px ${EMOTE_FONT}`;
     ctx.fillStyle = '#5b4660';
-    ctx.fillText(sub, 92, 140);
+    ctx.fillText(sub, 92, 140, 356);
     ctx.restore();
     tex.needsUpdate = true;
   }
@@ -630,7 +626,7 @@ export function createMascot() {
   group.add(crest.group);
 
   // ---------- State ----------
-  let lang = 'vi';
+  let lang = DEFAULT_LANG;
   let mood = 'idle';
   let emoteKey = null;
   let emoteAge = 0;
@@ -647,14 +643,13 @@ export function createMascot() {
   const pointerCurrent = { x: 0, y: 0 };
 
   function showEmote(key, seconds = 0) {
-    const entry = EMOTES[lang][key];
-    if (!entry) {
+    if (!EMOTE_COLORS[key]) {
       emoteKey = null;
       emote.sprite.visible = false;
       return;
     }
     emoteKey = key;
-    emote.draw(...entry);
+    emote.draw(...emoteFor(lang, key));
     emote.sprite.visible = true;
     emoteAge = 0;
     emoteTimer = seconds;
@@ -668,8 +663,8 @@ export function createMascot() {
   }
 
   function setLang(next) {
-    lang = EMOTES[next] ? next : 'vi';
-    if (emoteKey && emote.sprite.visible) emote.draw(...EMOTES[lang][emoteKey]);
+    lang = isLang(next) ? next : DEFAULT_LANG;
+    if (emoteKey && emote.sprite.visible) emote.draw(...emoteFor(lang, emoteKey));
   }
 
   function showScore(score) {

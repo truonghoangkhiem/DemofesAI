@@ -3,12 +3,19 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Prompt Sensei (プロンプト先生) — 3D Anime AI Workshop Demo</title>
+  <title data-i18n="pageTitle">Prompt Sensei (プロンプト先生) — Workshop AI phong cách anime 3D</title>
+  <script>
+    // Apply the saved UI language before first paint (app.js handles the rest).
+    try {
+      var savedLang = localStorage.getItem('prompt_sensei_lang');
+      if (savedLang === 'en' || savedLang === 'ja') document.documentElement.lang = savedLang;
+    } catch (e) {}
+  </script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <!-- Fonts load without blocking the first paint or the scripts (they use display=swap anyway). -->
-  <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;600;700;800&family=Be+Vietnam+Pro:wght@400;500;600;700;800&family=Bungee&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
-  <noscript><link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;600;700;800&family=Be+Vietnam+Pro:wght@400;500;600;700;800&family=Bungee&display=swap" rel="stylesheet"></noscript>
+  <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;600;700;800&family=M+PLUS+Rounded+1c:wght@500;700;800&family=Be+Vietnam+Pro:wght@400;500;600;700;800&family=Bungee&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+  <noscript><link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;600;700;800&family=M+PLUS+Rounded+1c:wght@500;700;800&family=Be+Vietnam+Pro:wght@400;500;600;700;800&family=Bungee&display=swap" rel="stylesheet"></noscript>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%A6%8A%3C/text%3E%3C/svg%3E">
   <link rel="stylesheet" href="styles.css">
   <script type="importmap">
@@ -25,6 +32,7 @@
   <link rel="modulepreload" href="/vendor/marked/marked.esm.js">
   <link rel="modulepreload" href="/vendor/dompurify/purify.es.mjs">
   <link rel="modulepreload" href="app.js">
+  <link rel="modulepreload" href="i18n.js">
   <link rel="modulepreload" href="audio.js">
   <link rel="modulepreload" href="scene/index.js">
   <link rel="modulepreload" href="scene/sky.js">
@@ -47,7 +55,7 @@
   <link rel="modulepreload" href="/vendor/three/addons/shaders/OutputShader.js">
 </head>
 <body>
-  <canvas id="scene" aria-label="3D Japanese Anime Scene" tabindex="0"></canvas>
+  <canvas id="scene" aria-label="Khung cảnh anime Nhật Bản 3D" data-i18n-aria-label="sceneLabel" tabindex="0"></canvas>
   <div class="screen-fx" aria-hidden="true"></div>
   <div class="flash" id="flash" aria-hidden="true"></div>
 
@@ -67,37 +75,46 @@
           <h1 class="brand-title">Prompt <em>Sensei</em></h1>
           <span class="brand-jp">プロンプト先生</span>
         </div>
-        <p class="brand-sub" id="brand-sub">Trợ lý Tối ưu Prompt AI · Phong cách Anime 3D</p>
+        <p class="brand-sub" id="brand-sub" data-i18n="brandSub">Trợ lý Tối ưu Prompt AI · Phong cách Anime 3D</p>
       </div>
       <span class="workshop-badge">AI FESTA</span>
     </div>
 
     <div class="topbar-actions">
-      <button id="cinema-btn" class="ctrl-btn" type="button" title="Chuyển chế độ xem 3D">
+      <button id="cinema-btn" class="ctrl-btn" type="button" title="Chuyển chế độ xem toàn cảnh 3D" data-i18n-title="cinemaTitle">
         <span class="ctrl-icon" aria-hidden="true">🌸</span>
         <span class="ctrl-text" id="cinema-btn-text">Toàn cảnh 3D</span>
       </button>
-      <button id="sound-btn" class="ctrl-btn" type="button" title="Bật/Tắt âm thanh hiệu ứng anime">
+      <button id="sound-btn" class="ctrl-btn" type="button" title="Bật/Tắt âm thanh hiệu ứng anime" data-i18n-title="soundTitle">
         <span class="ctrl-icon" aria-hidden="true">🔊</span>
         <span class="ctrl-text" id="sound-btn-text">Âm thanh</span>
       </button>
-      <button id="music-btn" class="ctrl-btn" type="button" title="Bật/Tắt nhạc nền">
+      <button id="music-btn" class="ctrl-btn" type="button" title="Bật/Tắt nhạc nền" data-i18n-title="musicTitle">
         <span class="ctrl-icon" aria-hidden="true">🎵</span>
         <span class="ctrl-text" id="music-btn-text">Nhạc</span>
       </button>
-      <button id="guide-btn" class="ctrl-btn" type="button" title="Xem hướng dẫn demo">
+      <button id="guide-btn" class="ctrl-btn" type="button" title="Xem hướng dẫn demo" data-i18n-title="guideTitle">
         <span class="ctrl-icon" aria-hidden="true">📜</span>
-        <span class="ctrl-text" id="guide-btn-text">Workshop</span>
+        <span class="ctrl-text" id="guide-btn-text" data-i18n="guideBtn">Workshop</span>
       </button>
-      <button id="lang-btn" class="ctrl-btn lang-pill" type="button" title="Đổi ngôn ngữ / Switch language">
-        <span class="ctrl-text">🇻🇳 VI</span>
-      </button>
+      <div class="lang-wrap">
+        <button id="lang-btn" class="ctrl-btn lang-pill" type="button" title="Đổi ngôn ngữ" data-i18n-title="langTitle"
+          aria-haspopup="menu" aria-expanded="false" aria-controls="lang-menu">
+          <span class="ctrl-text" id="lang-btn-text">🇻🇳 VI</span>
+          <span class="lang-caret" aria-hidden="true">▾</span>
+        </button>
+        <div id="lang-menu" class="lang-menu" role="menu" aria-labelledby="lang-btn" hidden>
+          <button type="button" role="menuitemradio" data-lang="vi" lang="vi" aria-checked="true"><span class="lang-code" aria-hidden="true">VI</span>Tiếng Việt</button>
+          <button type="button" role="menuitemradio" data-lang="en" lang="en" aria-checked="false"><span class="lang-code" aria-hidden="true">EN</span>English</button>
+          <button type="button" role="menuitemradio" data-lang="ja" lang="ja" aria-checked="false"><span class="lang-code" aria-hidden="true">JA</span>日本語</button>
+        </div>
+      </div>
     </div>
   </header>
 
   <div class="mascot-tip" id="mascot-tip" role="status">
     <span class="mascot-tip-icon" aria-hidden="true">🦊</span>
-    <span id="mascot-tip-text">Nhấp vào Sensei để tương tác &amp; nhận lời chúc!</span>
+    <span id="mascot-tip-text" data-i18n="mascotTip">Nhấp vào Sensei để tương tác &amp; nhận lời chúc! 💖</span>
   </div>
 
   <main class="panel" id="panel">
@@ -111,45 +128,45 @@
     <section data-view="input">
       <div class="section-head">
         <span class="quest-chip" aria-hidden="true">QUEST</span>
-        <h2 id="input-title">Viết Prompt của bạn</h2>
+        <h2 id="input-title" data-i18n="inputTitle">Viết Prompt của bạn</h2>
       </div>
-      <p class="hint" id="input-hint">Sensei sẽ chấm điểm theo quy tắc 3C (Rõ ràng · Ngắn gọn · Nhất quán) và khung Role · Task · Context · Format.</p>
+      <p class="hint" id="input-hint" data-i18n="inputHint">Sensei sẽ chấm điểm theo quy tắc 3C (Rõ ràng · Ngắn gọn · Nhất quán) và khung Role · Task · Context · Format.</p>
 
       <div class="presets-box">
         <div class="presets-header">
           <span class="presets-icon" aria-hidden="true">⚡</span>
-          <span class="presets-title" id="presets-label">Prompt mẫu thử nhanh cho Workshop:</span>
+          <span class="presets-title" id="presets-label" data-i18n="presetsLabel">Prompt mẫu thử nhanh cho Workshop:</span>
         </div>
         <div class="presets-grid">
           <button type="button" class="preset-pill" data-preset="blog">
-            <span class="pill-badge red">★☆☆ Sơ sài</span>
-            <span class="pill-text">📝 Viết blog về AI</span>
+            <span class="pill-badge red" data-i18n="preset.blog.badge">★☆☆ Sơ sài</span>
+            <span class="pill-text" data-i18n="preset.blog.label">📝 Viết blog về AI</span>
           </button>
           <button type="button" class="preset-pill" data-preset="email">
-            <span class="pill-badge gold">★★☆ Thiếu ý</span>
-            <span class="pill-text">📧 Email xin nghỉ phép</span>
+            <span class="pill-badge gold" data-i18n="preset.email.badge">★★☆ Thiếu ý</span>
+            <span class="pill-text" data-i18n="preset.email.label">📧 Email xin nghỉ phép</span>
           </button>
           <button type="button" class="preset-pill" data-preset="marketing">
-            <span class="pill-badge green">★★★ Chi tiết</span>
-            <span class="pill-text">🎯 Kế hoạch Marketing Gen Z</span>
+            <span class="pill-badge green" data-i18n="preset.marketing.badge">★★★ Chi tiết</span>
+            <span class="pill-text" data-i18n="preset.marketing.label">🎯 Kế hoạch Marketing Gen Z</span>
           </button>
           <button type="button" class="preset-pill" data-preset="coding">
-            <span class="pill-badge blue">★★★ Kỹ thuật</span>
-            <span class="pill-text">💻 Viết hàm Python tối ưu</span>
+            <span class="pill-badge blue" data-i18n="preset.coding.badge">★★★ Kỹ thuật</span>
+            <span class="pill-text" data-i18n="preset.coding.label">💻 Viết hàm Python tối ưu</span>
           </button>
         </div>
       </div>
 
       <div class="textarea-wrapper">
-        <label for="prompt-input" class="sr-only">Your prompt</label>
-        <textarea id="prompt-input" maxlength="4000" rows="8" placeholder="Ví dụ: Đóng vai chuyên gia dinh dưỡng, hãy lập thực đơn giảm cân khoa học 7 ngày cho nhân viên văn phòng..."></textarea>
+        <label for="prompt-input" class="sr-only" data-i18n="promptLabel">Prompt của bạn</label>
+        <textarea id="prompt-input" maxlength="4000" rows="8" data-i18n-placeholder="promptPlaceholder" placeholder="Ví dụ: Đóng vai chuyên gia dinh dưỡng, hãy lập thực đơn giảm cân khoa học 7 ngày cho nhân viên văn phòng..."></textarea>
       </div>
 
       <div class="row">
         <span id="char-count" class="muted counter">0 / 4000</span>
         <button id="evaluate-btn" class="btn primary" type="button">
           <span class="btn-icon" aria-hidden="true">⚔️</span>
-          <span id="evaluate-btn-text">Đánh giá ngay</span>
+          <span id="evaluate-btn-text" data-i18n="evaluateBtn">Đánh giá ngay</span>
           <kbd>Ctrl+Enter</kbd>
         </button>
       </div>
@@ -159,18 +176,18 @@
     <section data-view="clarify" hidden>
       <div class="section-head">
         <span class="quest-chip violet" aria-hidden="true">EVENT</span>
-        <h2 id="clarify-title">Sensei cần hỏi rõ thêm một chút</h2>
+        <h2 id="clarify-title" data-i18n="clarifyTitle">Sensei cần hỏi rõ thêm một chút</h2>
       </div>
       <div class="dialogue">
-        <span class="nameplate" aria-hidden="true">🦊 Sensei</span>
+        <span class="nameplate" aria-hidden="true" data-i18n="nameplate">🦊 Sensei</span>
         <p id="clarify-reason" class="bubble"></p>
         <span class="dialogue-next" aria-hidden="true">▼</span>
       </div>
       <form id="clarify-form">
         <ol id="clarify-list"></ol>
         <div class="row">
-          <button type="button" id="skip-btn" class="btn ghost">Bỏ qua &amp; Chấm điểm luôn</button>
-          <button type="submit" class="btn primary" id="clarify-submit-btn">Gửi câu trả lời</button>
+          <button type="button" id="skip-btn" class="btn ghost" data-i18n="skipBtn">Bỏ qua &amp; Chấm điểm luôn</button>
+          <button type="submit" class="btn primary" id="clarify-submit-btn" data-i18n="submitAnswers">Gửi câu trả lời</button>
         </div>
       </form>
     </section>
@@ -181,59 +198,59 @@
         <div class="score-crest" id="score-crest" data-rank="C">
           <span class="crest-rays" aria-hidden="true"></span>
           <span class="crest-badge" aria-hidden="true"><span id="rank-letter">C</span></span>
-          <div class="hanko" id="overall-score" role="img" aria-label="Overall score">0</div>
+          <div class="hanko" id="overall-score" role="img" aria-label="Điểm tổng" data-i18n-aria-label="overallScoreLabel">0</div>
         </div>
         <div class="score-meta">
           <span class="quest-chip gold" aria-hidden="true">QUEST CLEAR</span>
-          <h2 id="score-title" tabindex="-1">Điểm số</h2>
+          <h2 id="score-title" tabindex="-1" data-i18n="scoreHeading">Điểm số</h2>
           <p id="score-subtitle" class="muted"></p>
           <div class="xp-bar" aria-hidden="true"><span id="xp-fill"></span></div>
         </div>
       </div>
 
-      <h3 id="rubric-heading" class="hud-heading">Chi tiết 9 tiêu chí đánh giá</h3>
+      <h3 id="rubric-heading" class="hud-heading" data-i18n="rubricHeading">Chi tiết 9 tiêu chí đánh giá</h3>
       <ul id="criteria-list" class="criteria"></ul>
 
       <div class="feedback-card good">
-        <h3 id="strengths-heading">🌸 Điểm bạn làm rất tốt</h3>
+        <h3 id="strengths-heading" data-i18n="strengthsHeading">🌸 Điểm bạn làm rất tốt</h3>
         <ul id="strengths-list" class="bullets"></ul>
       </div>
 
       <div class="feedback-card tips">
-        <h3 id="tips-heading">✨ Lời khuyên vàng từ Sensei</h3>
+        <h3 id="tips-heading" data-i18n="tipsHeading">✨ Lời khuyên vàng từ Sensei</h3>
         <ul id="tips-list" class="bullets"></ul>
       </div>
 
       <div class="improved-card">
         <div class="improved-header">
-          <h3 id="improved-heading">📜 Prompt đã được tối ưu hóa</h3>
+          <h3 id="improved-heading" data-i18n="improvedHeading">📜 Prompt đã được tối ưu hóa</h3>
           <span class="badge-enhanced">LEGENDARY ✦</span>
         </div>
         <pre id="improved-prompt" class="prompt-box"></pre>
       </div>
 
       <div class="row wrap actions-row">
-        <button id="copy-btn" class="btn ghost" type="button">📋 Sao chép</button>
-        <button id="use-btn" class="btn ghost" type="button">✨ Dùng prompt này</button>
-        <button id="try-btn" class="btn primary" type="button">⚔️ Chạy thử so sánh</button>
+        <button id="copy-btn" class="btn ghost" type="button" data-i18n="copyBtn">📋 Sao chép</button>
+        <button id="use-btn" class="btn ghost" type="button" data-i18n="useBtn">✨ Dùng prompt này</button>
+        <button id="try-btn" class="btn primary" type="button" data-i18n="tryBtn">⚔️ Chạy thử so sánh</button>
       </div>
-      <button class="btn link restart" type="button" id="restart-btn-1">↩ Bắt đầu lại với prompt khác</button>
+      <button class="btn link restart" type="button" id="restart-btn-1" data-i18n="restartBtn">↩ Bắt đầu lại với prompt khác</button>
     </section>
 
     <!-- 4. COMPARE VIEW -->
     <section data-view="compare" hidden>
       <div class="section-head">
         <span class="quest-chip red" aria-hidden="true">BATTLE</span>
-        <h2 id="compare-title" tabindex="-1">Cùng một AI, hai kết quả khác biệt!</h2>
+        <h2 id="compare-title" tabindex="-1" data-i18n="compareTitle">Cùng một AI, hai kết quả khác biệt!</h2>
       </div>
 
       <div class="compare">
         <article class="column original-col">
           <div class="column-header">
-            <h3>Prompt ban đầu</h3>
-            <span class="badge-col">Chưa tối ưu</span>
+            <h3 data-i18n="originalHeading">Prompt ban đầu</h3>
+            <span class="badge-col" data-i18n="originalBadge">Chưa tối ưu</span>
           </div>
-          <details><summary id="summary-original">Xem prompt gốc</summary><pre id="compare-original-prompt" class="prompt-box"></pre></details>
+          <details><summary id="summary-original" data-i18n="originalSummary">Xem prompt gốc</summary><pre id="compare-original-prompt" class="prompt-box"></pre></details>
           <div id="compare-original" class="answer"></div>
         </article>
 
@@ -241,17 +258,17 @@
 
         <article class="column improved improved-col">
           <div class="column-header">
-            <h3>Prompt đã được Sensei tối ưu</h3>
-            <span class="badge-col enhanced">Tối ưu 3C 🌸</span>
+            <h3 data-i18n="improvedColHeading">Prompt đã được Sensei tối ưu</h3>
+            <span class="badge-col enhanced" data-i18n="improvedBadge">Tối ưu 3C 🌸</span>
           </div>
-          <details><summary id="summary-improved">Xem prompt cải tiến</summary><pre id="compare-improved-prompt" class="prompt-box"></pre></details>
+          <details><summary id="summary-improved" data-i18n="improvedSummary">Xem prompt cải tiến</summary><pre id="compare-improved-prompt" class="prompt-box"></pre></details>
           <div id="compare-improved" class="answer"></div>
         </article>
       </div>
 
       <div class="row">
-        <button id="back-btn" class="btn ghost" type="button">⬅ Quay lại kết quả</button>
-        <button class="btn link restart" type="button" id="restart-btn-2">↩ Bắt đầu lại</button>
+        <button id="back-btn" class="btn ghost" type="button" data-i18n="backBtn">⬅ Quay lại kết quả</button>
+        <button class="btn link restart" type="button" id="restart-btn-2" data-i18n="restartShort">↩ Bắt đầu lại</button>
       </div>
     </section>
   </main>
@@ -262,31 +279,21 @@
       <i class="corner tl" aria-hidden="true"></i><i class="corner tr" aria-hidden="true"></i>
       <i class="corner bl" aria-hidden="true"></i><i class="corner br" aria-hidden="true"></i>
       <div class="modal-head">
-        <h2><span class="quest-chip gold" aria-hidden="true">QUEST LOG</span> Hướng dẫn Trình diễn Workshop</h2>
-        <button type="button" id="guide-close" class="modal-close-btn" aria-label="Đóng">✕</button>
+        <h2><span class="quest-chip gold" aria-hidden="true">QUEST LOG</span> <span data-i18n="guideHeading">Hướng dẫn Trình diễn Workshop</span></h2>
+        <button type="button" id="guide-close" class="modal-close-btn" aria-label="Đóng" data-i18n-aria-label="guideClose">✕</button>
       </div>
       <div class="modal-body">
-        <p class="guide-intro">Chào mừng bạn đến với buổi demo <strong>AI Festa</strong>! Dưới đây là 4 bước để trình diễn ấn tượng nhất cho khán giả:</p>
+        <p class="guide-intro" data-i18n-html="guideIntroHtml"></p>
         <ol class="guide-steps">
-          <li>
-            <strong>Chọn prompt sơ sài:</strong> Bấm chọn <em>"📝 Viết blog về AI"</em> hoặc <em>"📧 Email xin nghỉ phép"</em>.
-          </li>
-          <li>
-            <strong>Trải nghiệm hỏi làm rõ (Clarification):</strong> Sensei trong 3D sẽ nghiêng đầu suy nghĩ và đưa ra các câu hỏi gợi mở để người viết bổ sung ngữ cảnh.
-          </li>
-          <li>
-            <strong>Chấm điểm 3C &amp; nhận Rank:</strong> Xem điểm số, rank S/A/B/C, bảng 9 tiêu chí và bản prompt viết lại chất lượng cao.
-          </li>
-          <li>
-            <strong>Chạy thử song song (Battle A/B):</strong> Bấm <em>"⚔️ Chạy thử so sánh"</em> để khán giả tận mắt chứng kiến output vượt trội của Gemini khi prompt được trau chuốt!
-          </li>
+          <li data-i18n-html="guideStep1Html"></li>
+          <li data-i18n-html="guideStep2Html"></li>
+          <li data-i18n-html="guideStep3Html"></li>
+          <li data-i18n-html="guideStep4Html"></li>
         </ol>
-        <div class="guide-tip-box">
-          💡 <strong>Mẹo trình chiếu:</strong> Bấm nút <strong>"🌸 Toàn cảnh 3D"</strong> ở thanh trên để thu gọn bảng điều khiển và ngắm đảo nổi cùng chú cáo Kitsune ba đuôi!
-        </div>
+        <div class="guide-tip-box" data-i18n-html="guideTipHtml"></div>
       </div>
       <div class="modal-foot">
-        <button type="button" id="guide-ok" class="btn primary">Đã hiểu, bắt đầu demo!</button>
+        <button type="button" id="guide-ok" class="btn primary" data-i18n="guideOk">Đã hiểu, bắt đầu demo!</button>
       </div>
     </div>
   </div>
@@ -294,7 +301,7 @@
   <div id="toast" class="toast" role="alert" hidden>
     <span class="toast-icon" aria-hidden="true">!</span>
     <span id="toast-text"></span>
-    <button id="toast-close" type="button" aria-label="Dismiss">×</button>
+    <button id="toast-close" type="button" aria-label="Đóng thông báo" data-i18n-aria-label="toastDismiss">×</button>
   </div>
 
   <script type="module" src="app.js" onerror="window.__loadFailed && window.__loadFailed()"></script>
@@ -302,17 +309,37 @@
     // If the page code cannot load (e.g. the server runs older code without /vendor), say so instead of
     // leaving the loader spinning forever; also hint after a long wait.
     (function () {
+      // Kept inline (not in i18n.js) so these messages still show when the module code cannot load.
+      var LOADER_TEXT = {
+        "vi": {
+          "loading": "Đang tải…",
+          "failed": "Không tải được mã trang. Hãy chạy “npm install”, khởi động lại server rồi bấm Ctrl+Shift+R.",
+          "slow": "Tải lâu hơn bình thường… Nếu vẫn kẹt: khởi động lại server rồi bấm Ctrl+Shift+R (F12 → Console để xem lỗi)."
+        },
+        "en": {
+          "loading": "NOW LOADING…",
+          "failed": "Could not load the page code. Run “npm install”, restart the server, then press Ctrl+Shift+R.",
+          "slow": "Loading is taking longer than usual… If it stays stuck: restart the server, then press Ctrl+Shift+R (F12 → Console shows the error)."
+        },
+        "ja": {
+          "loading": "読み込み中…",
+          "failed": "ページのコードを読み込めませんでした。「npm install」を実行してサーバーを再起動し、Ctrl+Shift+R を押してください。",
+          "slow": "読み込みに通常より時間がかかっています… 止まったままの場合は、サーバーを再起動して Ctrl+Shift+R を押してください（F12 → Console でエラーを確認できます）。"
+        }
+      };
+      var messages = LOADER_TEXT[document.documentElement.lang] || LOADER_TEXT.vi;
       var text = document.querySelector('.loader-text');
+      if (text) text.textContent = messages.loading;
       function show(message) {
         if (document.body.classList.contains('scene-ready') || !text) return;
         text.textContent = message;
         text.classList.add('loader-error');
       }
       window.__loadFailed = function () {
-        show('Không tải được mã trang. Hãy chạy "npm install", khởi động lại server rồi bấm Ctrl+Shift+R.');
+        show(messages.failed);
       };
       setTimeout(function () {
-        show('Tải lâu hơn bình thường… Nếu vẫn kẹt: khởi động lại server rồi bấm Ctrl+Shift+R (F12 → Console để xem lỗi).');
+        show(messages.slow);
       }, 15000);
     })();
   </script>

@@ -19,9 +19,10 @@
   --red: #ff5a6e;
   --violet: #b18cff;
   --panel-w: min(540px, 46vw);
-  --font-display: "Baloo 2", "Be Vietnam Pro", system-ui, sans-serif;
-  --font-body: "Be Vietnam Pro", system-ui, sans-serif;
-  --font-game: "Bungee", "Baloo 2", system-ui, sans-serif;
+  /* M PLUS Rounded 1c covers kana and kanji (Google Fonts only downloads the subsets a page uses). */
+  --font-display: "Baloo 2", "Be Vietnam Pro", "M PLUS Rounded 1c", system-ui, sans-serif;
+  --font-body: "Be Vietnam Pro", "M PLUS Rounded 1c", system-ui, sans-serif;
+  --font-game: "Bungee", "Baloo 2", "M PLUS Rounded 1c", system-ui, sans-serif;
   --ease-pop: cubic-bezier(0.2, 1.4, 0.4, 1);
 }
 
@@ -292,6 +293,62 @@ body.cinema-mode .topbar { right: 18px; }
   outline: 3px solid var(--cyan);
   outline-offset: 2px;
 }
+
+/* LANGUAGE MENU */
+.lang-wrap { position: relative; }
+.lang-caret { font-size: 10px; opacity: 0.75; }
+.lang-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  min-width: 168px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px;
+  background: var(--glass-strong);
+  backdrop-filter: blur(12px);
+  border: 2px solid var(--gold-line);
+  border-radius: 14px;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
+  animation: langMenuIn 0.18s var(--ease-pop);
+}
+.lang-menu[hidden] { display: none; }
+@keyframes langMenuIn { from { opacity: 0; transform: translateY(-6px) scale(0.96); } }
+.lang-menu button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font: 700 14px var(--font-display);
+  color: var(--text);
+  background: transparent;
+  border: 0;
+  border-radius: 9px;
+  padding: 8px 10px;
+  cursor: pointer;
+  text-align: left;
+  white-space: nowrap;
+}
+.lang-menu button:hover, .lang-menu button:focus-visible { background: var(--card-hover); outline: none; }
+.lang-menu button:focus-visible { box-shadow: inset 0 0 0 2px var(--cyan); }
+.lang-menu button[aria-checked="true"] { color: var(--gold); }
+.lang-menu button[aria-checked="true"]::after { content: "✓"; margin-left: auto; }
+.lang-code {
+  font: 400 11px var(--font-game);
+  letter-spacing: 0.04em;
+  padding: 2px 6px;
+  border-radius: 5px;
+  color: var(--ink);
+  background: var(--text-soft);
+}
+.lang-menu button[aria-checked="true"] .lang-code { background: var(--gold); }
+
+/* JAPANESE TEXT: break between phrases (not inside words), and never overflow a box. */
+:lang(ja) body { line-break: strict; word-break: auto-phrase; }
+:lang(ja) :is(.btn, .preset-pill, .pill-badge, .badge-col, h2, h3, .hint) { overflow-wrap: anywhere; }
+:lang(ja) h2 { letter-spacing: 0; }
+/* Browsers fake italics for kana/kanji by slanting them; emphasise with colour instead. */
+:lang(ja) em { font-style: normal; color: var(--gold); }
 
 /* MASCOT TIP */
 .mascot-tip {

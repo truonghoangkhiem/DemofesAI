@@ -1,6 +1,7 @@
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
 import * as audio from './audio.js';
+import { t, isLang, findPreset, LANGS, DEFAULT_LANG, PRESETS } from './i18n.js';
 
 const $ = id => document.getElementById(id);
 const NO_SCENE = {
@@ -15,111 +16,28 @@ const NO_SCENE = {
 };
 const MAX_CHARS = 4000;
 
-// Presets in both Vietnamese and English
-const PRESETS = {
-  vi: {
-    blog: 'Viết một bài blog ngắn về trí tuệ nhân tạo (AI).',
-    email: 'Viết email xin nghỉ phép gửi sếp.',
-    marketing:
-      'Đóng vai Giám đốc Marketing, hãy lập kế hoạch ra mắt sản phẩm nước ép organic cho sinh viên tại TP.HCM trong 3 tháng tới theo cấu trúc: Mục tiêu, Khách hàng mục tiêu, Kênh truyền thông, và Dự toán ngân sách.',
-    coding:
-      'Bạn là Senior Python Engineer. Hãy viết hàm tối ưu đọc file CSV 500MB và tính tổng doanh thu theo từng tháng bằng Pandas/Polars, xử lý ngoại lệ dữ liệu bị thiếu và có kèm docstring chuẩn.',
-  },
-  en: {
-    blog: 'Write a short blog post about artificial intelligence (AI).',
-    email: 'Write an email requesting sick leave to my manager.',
-    marketing:
-      'Act as a Marketing Director. Create a 3-month launch plan for a new organic juice targeting college students in Ho Chi Minh City, structured into: Objectives, Audience, Channels, and Budget.',
-    coding:
-      'You are a Senior Python Engineer. Write an optimized function to parse a 500MB CSV and aggregate monthly revenue with Pandas/Polars, handling missing values with type hints.',
-  },
-};
+const LANG_KEY = 'prompt_sensei_lang';
 
-// UI Translations
-const I18N = {
-  vi: {
-    brandSub: 'Trợ lý Tối ưu Prompt AI · Phong cách Anime 3D',
-    cinemaBtn: 'Toàn cảnh 3D',
-    cinemaExit: 'Xem bảng UI',
-    soundBtn: 'Âm thanh',
-    soundMuted: 'Tắt tiếng',
-    musicBtn: 'Nhạc',
-    musicMuted: 'Tắt nhạc',
-    guideBtn: 'Workshop',
-    langPill: '🇻🇳 VI',
-    mascotTip: 'Nhấp vào Sensei để tương tác & nhận lời chúc! 💖',
-    inputTitle: 'Viết Prompt của bạn',
-    inputHint: 'Sensei sẽ chấm điểm theo quy tắc 3C (Rõ ràng · Ngắn gọn · Nhất quán) và khung Role · Task · Context · Format.',
-    presetsLabel: 'Prompt mẫu thử nhanh cho Workshop:',
-    evaluateBtn: 'Đánh giá ngay',
-    clarifyTitle: 'Sensei cần hỏi rõ thêm một chút',
-    skipBtn: 'Bỏ qua & Chấm điểm luôn',
-    submitAnswers: 'Gửi câu trả lời',
-    scoreHeading: 'Điểm số',
-    rubricHeading: 'Chi tiết 9 tiêu chí đánh giá',
-    strengthsHeading: '🌸 Điểm bạn làm rất tốt',
-    tipsHeading: '✨ Lời khuyên vàng từ Sensei',
-    improvedHeading: '📜 Prompt đã được tối ưu hóa',
-    copyBtn: '📋 Sao chép',
-    useBtn: '✨ Dùng prompt này',
-    tryBtn: '⚔️ Chạy thử so sánh',
-    restartBtn: '↩ Bắt đầu lại với prompt khác',
-    compareTitle: 'Cùng một AI, hai kết quả khác biệt!',
-    backBtn: '⬅ Quay lại kết quả',
-    busyThinking: 'Sensei đang suy nghĩ & phân tích prompt…',
-    busyComparing: 'Đang chạy song song cả 2 prompt với Gemini…',
-    toastPromptEmpty: 'Vui lòng nhập prompt trước.',
-    toastCopied: 'Đã sao chép prompt cải tiến!',
-    toastCopyError: 'Không thể tự động sao chép. Vui lòng bôi đen và nhấn Ctrl+C.',
-    placeholderOriginal: 'Gemini đang trả lời prompt ban đầu…',
-    placeholderImproved: 'Gemini đang trả lời prompt đã tối ưu…',
-    titleExcellent: 'Xuất sắc! (Sugoi)',
-    titleGood: 'Khá tốt, hãy tiếp tục!',
-    titleNeedsWork: 'Cần hoàn thiện thêm',
-  },
-  en: {
-    brandSub: 'Your AI Prompt Coach · 3D Anime Edition',
-    cinemaBtn: '3D Scenic',
-    cinemaExit: 'Show UI',
-    soundBtn: 'Sound',
-    soundMuted: 'Muted',
-    musicBtn: 'Music',
-    musicMuted: 'No music',
-    guideBtn: 'Workshop',
-    langPill: '🇬🇧 EN',
-    mascotTip: 'Click on Sensei to interact & get cheer! 💖',
-    inputTitle: 'Write your prompt',
-    inputHint: 'Sensei scores it with the 3C rule (Concise · Clear · Consistent) and the Role · Task · Context · Format framework.',
-    presetsLabel: 'Quick Workshop Demo Presets:',
-    evaluateBtn: 'Evaluate',
-    clarifyTitle: 'Sensei has a few questions',
-    skipBtn: 'Skip & score anyway',
-    submitAnswers: 'Submit answers',
-    scoreHeading: 'Score',
-    rubricHeading: 'Rubric Criteria',
-    strengthsHeading: '🌸 What you did well',
-    tipsHeading: "✨ Sensei's tips",
-    improvedHeading: '📜 Improved prompt',
-    copyBtn: '📋 Copy',
-    useBtn: '✨ Use this',
-    tryBtn: '⚔️ Try it',
-    restartBtn: '↩ Start over',
-    compareTitle: 'Same AI, two prompts',
-    backBtn: '⬅ Back to result',
-    busyThinking: 'Sensei is thinking & scoring…',
-    busyComparing: 'Running both prompts side by side…',
-    toastPromptEmpty: 'Write a prompt first.',
-    toastCopied: 'Copied to clipboard!',
-    toastCopyError: 'Could not copy. Select the text and copy manually.',
-    placeholderOriginal: 'Gemini is answering the original prompt…',
-    placeholderImproved: 'Gemini is answering the improved prompt…',
-    titleExcellent: 'Excellent prompt! (Sugoi)',
-    titleGood: 'Good start, keep going!',
-    titleNeedsWork: 'Needs work',
-  },
-};
+// Storage can throw (private mode, blocked site data); the page must still work without it.
+function loadLang() {
+  try {
+    const saved = localStorage.getItem(LANG_KEY);
+    return isLang(saved) ? saved : DEFAULT_LANG;
+  } catch {
+    return DEFAULT_LANG;
+  }
+}
+function saveLang(lang) {
+  try {
+    localStorage.setItem(LANG_KEY, lang);
+  } catch {
+    // Not saved; the choice still applies to this visit.
+  }
+}
 
-let currentLang = localStorage.getItem('prompt_sensei_lang') || 'vi';
+let currentLang = loadLang();
+// Text in the current UI language (see public/i18n.js).
+const tr = (key, params) => t(currentLang, key, params);
 
 // 3D Scene setup and state
 let realScene = NO_SCENE;
@@ -181,61 +99,60 @@ const state = { prompt: '', questions: [], result: null, busy: false };
 
 const rankFor = score => (score >= 90 ? 'S' : score >= 80 ? 'A' : score >= 60 ? 'B' : 'C');
 const moodFor = score => (score >= 80 ? 'happy' : score >= 50 ? 'neutral' : 'sad');
-const titleFor = score => {
-  const dict = I18N[currentLang];
-  return score >= 80 ? dict.titleExcellent : score >= 50 ? dict.titleGood : dict.titleNeedsWork;
-};
+const titleFor = score => tr(score >= 80 ? 'titleExcellent' : score >= 50 ? 'titleGood' : 'titleNeedsWork');
+
+// Fills every element marked with data-i18n (text), data-i18n-html (trusted markup from i18n.js),
+// data-i18n-placeholder, data-i18n-title or data-i18n-aria-label.
+const I18N_ATTRIBUTES = [
+  ['data-i18n-placeholder', 'placeholder'],
+  ['data-i18n-title', 'title'],
+  ['data-i18n-aria-label', 'aria-label'],
+];
+function translatePage() {
+  for (const el of document.querySelectorAll('[data-i18n]')) el.textContent = tr(el.dataset.i18n);
+  for (const el of document.querySelectorAll('[data-i18n-html]')) el.innerHTML = tr(el.dataset.i18nHtml);
+  for (const [marker, attribute] of I18N_ATTRIBUTES) {
+    for (const el of document.querySelectorAll(`[${marker}]`)) el.setAttribute(attribute, tr(el.getAttribute(marker)));
+  }
+}
 
 function applyLanguage(lang) {
-  currentLang = lang;
-  localStorage.setItem('prompt_sensei_lang', lang);
-  const dict = I18N[lang];
+  const previous = currentLang;
+  currentLang = isLang(lang) ? lang : DEFAULT_LANG;
+  saveLang(currentLang);
+  document.documentElement.lang = currentLang;
+  translatePage();
 
-  $('brand-sub').textContent = dict.brandSub;
-  $('cinema-btn-text').textContent = sceneState.cinema ? dict.cinemaExit : dict.cinemaBtn;
+  // Texts that depend on state rather than on a fixed key.
+  $('cinema-btn-text').textContent = tr(sceneState.cinema ? 'cinemaExit' : 'cinemaBtn');
   syncAudioButtons();
-  $('guide-btn-text').textContent = dict.guideBtn;
-  $('lang-btn').querySelector('.ctrl-text').textContent = dict.langPill;
-  $('mascot-tip-text').textContent = dict.mascotTip;
-
-  $('input-title').textContent = dict.inputTitle;
-  $('input-hint').textContent = dict.inputHint;
-  $('presets-label').textContent = dict.presetsLabel;
-  $('evaluate-btn-text').textContent = dict.evaluateBtn;
-
-  $('clarify-title').textContent = dict.clarifyTitle;
-  $('skip-btn').textContent = dict.skipBtn;
-  $('clarify-submit-btn').textContent = dict.submitAnswers;
-
-  $('rubric-heading').textContent = dict.rubricHeading;
-  $('strengths-heading').textContent = dict.strengthsHeading;
-  $('tips-heading').textContent = dict.tipsHeading;
-  $('improved-heading').textContent = dict.improvedHeading;
-
-  $('copy-btn').textContent = dict.copyBtn;
-  $('use-btn').textContent = dict.useBtn;
-  $('try-btn').textContent = dict.tryBtn;
-  $('restart-btn-1').textContent = dict.restartBtn;
-  $('restart-btn-2').textContent = dict.restartBtn;
-
-  $('compare-title').textContent = dict.compareTitle;
-  $('back-btn').textContent = dict.backBtn;
-
-  if (state.result) {
-    $('score-title').textContent = titleFor(state.result.overall);
+  $('lang-btn-text').textContent = LANGS.find(l => l.code === currentLang).pill;
+  for (const item of $('lang-menu').querySelectorAll('[data-lang]')) {
+    item.setAttribute('aria-checked', String(item.dataset.lang === currentLang));
   }
-  scene.setLang(lang);
+  if (state.busy) $('status-text').textContent = tr(busyKey);
+  if (state.result) renderScore(state.result);
+  swapPresetText(previous);
+  scene.setLang(currentLang);
+}
+
+// An unedited preset in the textarea follows the UI language; edited text is left alone.
+function swapPresetText(previous) {
+  const input = $('prompt-input');
+  const key = findPreset(input.value);
+  if (!key || previous === currentLang || input.value.trim() === PRESETS[currentLang][key]) return;
+  input.value = PRESETS[currentLang][key];
+  updateCount();
 }
 
 function syncAudioButtons() {
-  const dict = I18N[currentLang];
   const sound = audio.isSoundEnabled();
   const music = audio.isMusicEnabled();
-  $('sound-btn-text').textContent = sound ? dict.soundBtn : dict.soundMuted;
+  $('sound-btn-text').textContent = tr(sound ? 'soundBtn' : 'soundMuted');
   $('sound-btn').querySelector('.ctrl-icon').textContent = sound ? '🔊' : '🔇';
   $('sound-btn').classList.toggle('active', sound);
   $('sound-btn').classList.toggle('off', !sound);
-  $('music-btn-text').textContent = music ? dict.musicBtn : dict.musicMuted;
+  $('music-btn-text').textContent = tr(music ? 'musicBtn' : 'musicMuted');
   $('music-btn').classList.toggle('active', music);
   $('music-btn').classList.toggle('off', !music);
 }
@@ -256,17 +173,18 @@ function show(view) {
 }
 
 let busyTimer;
+let busyKey = 'busyThinking';
 function setBusy(on, textKey = 'busyThinking') {
   state.busy = on;
+  busyKey = textKey;
   clearInterval(busyTimer);
   $('status').classList.toggle('sr-only', !on);
-  const text = on ? I18N[currentLang][textKey] || textKey : '';
-  $('status-text').textContent = text;
+  $('status-text').textContent = on ? tr(textKey) : '';
   $('status-seconds').textContent = '';
   if (on) {
     const started = Date.now();
     busyTimer = setInterval(() => {
-      $('status-seconds').textContent = `${Math.floor((Date.now() - started) / 1000)} s`;
+      $('status-seconds').textContent = tr('seconds', { n: Math.floor((Date.now() - started) / 1000) });
     }, 1000);
   }
   for (const el of $('panel').querySelectorAll('button, textarea')) {
@@ -291,19 +209,49 @@ function hideToast() {
   $('toast').hidden = true;
 }
 
+// Error carrying the server's stable code (see lib/app.js) so its message can be shown translated.
+class ApiError extends Error {
+  constructor({ error, code, params } = {}, status) {
+    super(error || `Request failed (${status}).`);
+    this.code = code || (error ? 'UNKNOWN' : 'REQUEST_FAILED');
+    this.params = { status, ...params };
+  }
+}
+
+// User-facing text for an error: the translated message for its code, plus the technical detail
+// (e.g. the Gemini API message) when the server sent one.
+function errorText(err) {
+  const code = err?.code;
+  if (!code) return err?.message || tr('error.UNKNOWN');
+  const key = `error.${code}`;
+  const text = tr(key, err.params);
+  if (text === key) return err.message || tr('error.UNKNOWN');
+  return err.params?.detail ? `${text} (${err.params.detail})` : text;
+}
+
 function fail(err) {
-  showToast(err.message || 'Something went wrong.');
+  console.warn(err);
+  showToast(errorText(err));
   scene.setMood('sad');
 }
 
+async function post(path, body) {
+  try {
+    return await fetch(path, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+  } catch (err) {
+    // fetch() itself failed: the server is down or unreachable.
+    throw Object.assign(new Error(err.message), { code: 'NETWORK' });
+  }
+}
+
 async function api(path, body) {
-  const res = await fetch(path, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(body),
-  });
+  const res = await post(path, body);
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || `Request failed (${res.status}).`);
+  if (!res.ok) throw new ApiError(data, res.status);
   return data;
 }
 
@@ -405,9 +353,19 @@ function renderResult(data) {
   audio.playStamp();
   countUp(hanko, data.overall, () => audio.playFanfare(rankFor(data.overall)));
 
-  hanko.setAttribute('aria-label', `Overall score: ${data.overall} out of 100`);
-  $('score-title').textContent = titleFor(data.overall);
   $('score-subtitle').textContent = `${data.overall} / 100`;
+  renderScore(data);
+
+  show('result');
+  $('score-title').focus();
+  scene.setMood(moodFor(data.overall));
+  scene.showScore(data.overall);
+}
+
+// The parts of the result that follow the UI language (Gemini's own text stays as written).
+function renderScore(data) {
+  $('overall-score').setAttribute('aria-label', tr('overallScoreAria', { score: data.overall }));
+  $('score-title').textContent = titleFor(data.overall);
 
   $('criteria-list').replaceChildren(
     ...data.criteria.map(c => {
@@ -416,7 +374,8 @@ function renderResult(data) {
       const head = document.createElement('div');
       head.className = 'criterion-head';
       const name = document.createElement('span');
-      name.textContent = c.name;
+      const nameKey = `criterion.${c.id}`;
+      name.textContent = tr(nameKey) === nameKey ? c.name : tr(nameKey);
       const score = document.createElement('span');
       score.textContent = `${c.score} / ${c.max}`;
       head.append(name, score);
@@ -433,23 +392,15 @@ function renderResult(data) {
       );
 
       const feedback = document.createElement('p');
-      feedback.textContent = c.feedback;
+      feedback.textContent = c.feedback || tr('notAssessed');
       li.append(head, bar, feedback);
       return li;
     }),
   );
 
-  const defaultStrengths = currentLang === 'vi' ? ['Hãy tiếp tục luyện tập — mỗi prompt là một bài học!'] : ['Keep going — every prompt is practice.'];
-  const defaultTips = currentLang === 'vi' ? ['Không có lời khuyên bổ sung cho lần này.'] : ['No extra tips this time.'];
-
-  fillList($('strengths-list'), data.strengths.length ? data.strengths : defaultStrengths);
-  fillList($('tips-list'), data.tips.length ? data.tips : defaultTips);
+  fillList($('strengths-list'), data.strengths.length ? data.strengths : [tr('defaultStrength')]);
+  fillList($('tips-list'), data.tips.length ? data.tips : [tr('defaultTip')]);
   $('improved-prompt').textContent = data.improvedPrompt;
-
-  show('result');
-  $('score-title').focus();
-  scene.setMood(moodFor(data.overall));
-  scene.showScore(data.overall);
 }
 
 function renderAnswer(el, side, streaming = false) {
@@ -468,7 +419,7 @@ function renderAnswer(el, side, streaming = false) {
   if (side?.error || !side?.text) {
     const p = document.createElement('p');
     p.className = 'error';
-    p.textContent = side?.error || (currentLang === 'vi' ? 'Không có câu trả lời.' : 'No answer.');
+    p.textContent = side?.error ? errorText(side.error) : tr('noAnswer');
     nodes.push(p);
   }
   el.replaceChildren(...nodes);
@@ -482,14 +433,10 @@ function placeholder(el, text) {
 }
 
 async function streamEvents(path, body, onEvent) {
-  const res = await fetch(path, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(body),
-  });
+  const res = await post(path, body);
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
-    throw new Error(data.error || `Request failed (${res.status}).`);
+    throw new ApiError(data, res.status);
   }
   const reader = res.body.pipeThrough(new TextDecoderStream()).getReader();
   let buffer = '';
@@ -511,8 +458,8 @@ async function tryIt() {
 
   $('compare-original-prompt').textContent = state.prompt;
   $('compare-improved-prompt').textContent = state.result.improvedPrompt;
-  placeholder($('compare-original'), I18N[currentLang].placeholderOriginal);
-  placeholder($('compare-improved'), I18N[currentLang].placeholderImproved);
+  placeholder($('compare-original'), tr('placeholderOriginal'));
+  placeholder($('compare-improved'), tr('placeholderImproved'));
 
   show('compare');
   scene.setMood('thinking');
@@ -547,7 +494,7 @@ async function tryIt() {
           side.status = 'done';
         } else if (event.error) {
           side.status = 'error';
-          side.error = event.error;
+          side.error = new ApiError(event);
         }
       },
     );
@@ -555,7 +502,7 @@ async function tryIt() {
     for (const side of Object.values(sides)) {
       if (side.status === 'error' && !side.text) renderAnswer(side.el, { error: side.error });
       else if (side.text) renderAnswer(side.el, { text: side.text, error: side.status === 'error' ? side.error : null });
-      else renderAnswer(side.el, { error: currentLang === 'vi' ? 'Câu trả lời bị ngắt quãng. Hãy thử lại.' : 'The answer was cut off. Please try again.' });
+      else renderAnswer(side.el, { error: { message: tr('answerCutOff') } });
     }
     const success = sides.improved.status === 'done';
     scene.setMood(success ? 'happy' : 'sad');
@@ -567,7 +514,7 @@ async function tryIt() {
     }
   } catch (err) {
     cancelAnimationFrame(frame);
-    for (const side of Object.values(sides)) renderAnswer(side.el, { text: side.text, error: err.message });
+    for (const side of Object.values(sides)) renderAnswer(side.el, { text: side.text, error: err });
     fail(err);
   } finally {
     setBusy(false);
@@ -590,7 +537,7 @@ function goToInput() {
 function submitPrompt() {
   const prompt = $('prompt-input').value.trim();
   if (!prompt) {
-    showToast(I18N[currentLang].toastPromptEmpty);
+    showToast(tr('toastPromptEmpty'));
     return;
   }
   state.prompt = prompt;
@@ -600,8 +547,7 @@ function submitPrompt() {
 // Preset Pills click handler
 for (const pill of document.querySelectorAll('.preset-pill')) {
   pill.addEventListener('click', () => {
-    const presetKey = pill.dataset.preset;
-    const text = PRESETS[currentLang][presetKey] || PRESETS.vi[presetKey];
+    const text = PRESETS[currentLang][pill.dataset.preset];
     if (text) {
       $('prompt-input').value = text;
       updateCount();
@@ -628,7 +574,7 @@ $('music-btn').addEventListener('click', () => {
 $('cinema-btn').addEventListener('click', () => {
   const isCinema = document.body.classList.toggle('cinema-mode');
   scene.toggleCinema(isCinema);
-  $('cinema-btn-text').textContent = isCinema ? I18N[currentLang].cinemaExit : I18N[currentLang].cinemaBtn;
+  $('cinema-btn-text').textContent = tr(isCinema ? 'cinemaExit' : 'cinemaBtn');
   $('cinema-btn').classList.toggle('active', isCinema);
   audio.playCinema(isCinema);
 });
@@ -644,11 +590,42 @@ for (const id of ['guide-close', 'guide-ok']) {
   });
 }
 
-$('lang-btn').addEventListener('click', () => {
-  const nextLang = currentLang === 'vi' ? 'en' : 'vi';
-  applyLanguage(nextLang);
+// Language menu: the pill opens a small menu with one item per language.
+function setLangMenu(open, { focus = false } = {}) {
+  $('lang-menu').hidden = !open;
+  $('lang-btn').setAttribute('aria-expanded', String(open));
+  if (open && focus) $('lang-menu').querySelector('[aria-checked="true"]')?.focus();
+}
+$('lang-btn').addEventListener('click', event => {
+  const open = $('lang-menu').hidden;
+  setLangMenu(open, { focus: event.detail === 0 }); // keyboard activation moves focus into the menu
+  audio.playPop(open ? 600 : 420);
+});
+$('lang-menu').addEventListener('click', event => {
+  const item = event.target.closest('[data-lang]');
+  if (!item) return;
+  setLangMenu(false);
+  $('lang-btn').focus();
+  if (item.dataset.lang === currentLang) return;
+  applyLanguage(item.dataset.lang);
   audio.playPop(600);
   setTimeout(() => audio.playPop(800), 70);
+});
+$('lang-menu').addEventListener('keydown', event => {
+  if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
+  event.preventDefault();
+  const items = [...$('lang-menu').querySelectorAll('[data-lang]')];
+  const step = event.key === 'ArrowDown' ? 1 : -1;
+  items[(items.indexOf(document.activeElement) + step + items.length) % items.length].focus();
+});
+document.addEventListener('keydown', event => {
+  if (event.key === 'Escape' && !$('lang-menu').hidden) {
+    setLangMenu(false);
+    $('lang-btn').focus();
+  }
+});
+document.addEventListener('pointerdown', event => {
+  if (!$('lang-menu').hidden && !event.target.closest('.lang-wrap')) setLangMenu(false);
 });
 
 // Audio can only start after a user gesture; keep trying until the browser allows it.
@@ -697,9 +674,9 @@ $('skip-btn').addEventListener('click', () => evaluate([]));
 $('copy-btn').addEventListener('click', async () => {
   try {
     await navigator.clipboard.writeText(state.result.improvedPrompt);
-    showToast(I18N[currentLang].toastCopied, 'success');
+    showToast(tr('toastCopied'), 'success');
   } catch {
-    showToast(I18N[currentLang].toastCopyError);
+    showToast(tr('toastCopyError'));
   }
 });
 
@@ -709,7 +686,7 @@ $('use-btn').addEventListener('click', () => {
   audio.playPop(520);
   goToInput();
   if (improved.length > MAX_CHARS) {
-    showToast(`Prompt was truncated to ${MAX_CHARS} characters.`);
+    showToast(tr('toastTruncated', { max: MAX_CHARS }));
   }
 });
 
