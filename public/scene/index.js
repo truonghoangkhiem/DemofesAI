@@ -144,12 +144,19 @@ async function warmUp(renderer, scene, camera, effects) {
 // Resolves once the first frame is actually on screen, so the loader can cover shader compilation.
 export async function initScene(canvas, panelEl = document.getElementById('panel')) {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: false, powerPreference: 'high-performance' });
-  let pixelRatio = Math.min(window.devicePixelRatio, 1.5);
+  // Software rendering (browser hardware acceleration off, or a blocklisted GPU) draws about one
+  // frame per second at full quality, which looks frozen. Detect it up front and start light:
+  // lower render resolution, no shadows, no bloom, all decided before any shader is compiled.
+  const gl = renderer.getContext();
+  const gpuInfo = gl.getExtension('WEBGL_debug_renderer_info');
+  const gpuName = gpuInfo ? gl.getParameter(gpuInfo.UNMASKED_RENDERER_WEBGL) : 'unknown GPU';
+  const softwareGpu = /swiftshader|llvmpipe|softpipe|software|basic render/i.test(gpuName);
+  let pixelRatio = softwareGpu ? 0.5 : Math.min(window.devicePixelRatio, 1.5);
   renderer.setPixelRatio(pixelRatio);
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.08;
-  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.enabled = !softwareGpu;
   renderer.shadowMap.type = THREE.PCFShadowMap;
 
   const scene = new THREE.Scene();
@@ -198,7 +205,7 @@ export async function initScene(canvas, panelEl = document.getElementById('panel
   const lookCurrent = new THREE.Vector3();
   const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   let introT = reducedMotion ? 1 : 0;
-  // The fly-in waits until the loader has faded and advances by at most one 30 fps step per frame,
+  // The fly-in waits until the loader has faded and advances by at most 0.1 s per frame,
   // so start-up hitches cannot use up the animation while nobody can see it.
   let introDelay = INTRO_DELAY;
   const introFrom = new THREE.Vector3(-9, 9, 24);
@@ -274,10 +281,12 @@ export async function initScene(canvas, panelEl = document.getElementById('panel
   resize();
 
   // Adaptive quality: if the GPU struggles, drop the expensive bits rather than stutter.
-  let quality = 2;
+  let quality = softwareGpu ? 0 : 2;
+  if (softwareGpu) effects.bloom.enabled = false;
   let slowFrames = 0;
   function degrade() {
     quality--;
+    console.info(`[scene] slow GPU: lowering quality to level ${quality}`);
     if (quality === 1) {
       pixelRatio = 1;
       renderer.setPixelRatio(1);
@@ -285,9 +294,11 @@ export async function initScene(canvas, panelEl = document.getElementById('panel
       key.shadow.map?.dispose();
       key.shadow.map = null;
     } else {
+      // Never toggle shadowMap.enabled or flag materials for update here: that recompiles every
+      // shader at once and freezes the page for seconds. Freezing the shadow map is free instead.
       effects.bloom.enabled = false;
-      renderer.shadowMap.enabled = false;
-      scene.traverse(o => { if (o.material) o.material.needsUpdate = true; });
+      renderer.shadowMap.autoUpdate = false;
+      renderer.shadowMap.needsUpdate = true;
     }
     resize();
   }
@@ -306,7 +317,8 @@ export async function initScene(canvas, panelEl = document.getElementById('panel
     const camDt = Math.min(rawDt, 0.2); // camera uses real time so slow GPUs still arrive
     const t = timer.getElapsed();
 
-    if (quality > 0 && t > 2) {
+    // Skip the first seconds (every machine is busy then); degrading is cheap, it never recompiles shaders.
+    if (quality > 0 && t > 3) {
       slowFrames = rawDt > 0.045 ? slowFrames + 1 : Math.max(0, slowFrames - 1);
       if (slowFrames > 40) { slowFrames = 0; degrade(); }
     }
@@ -316,8 +328,8 @@ export async function initScene(canvas, panelEl = document.getElementById('panel
     camPos.set(cameraTargetPos.x + parallaxX, cameraTargetPos.y + parallaxY, cameraTargetPos.z);
     camLook.copy(lookTarget);
     if (introT < 1) {
-      if (introDelay > 0) introDelay -= Math.min(camDt, 1 / 30);
-      else introT = Math.min(1, introT + Math.min(camDt, 1 / 30) / INTRO_SECONDS);
+      if (introDelay > 0) introDelay -= Math.min(camDt, 0.1);
+      else introT = Math.min(1, introT + Math.min(camDt, 0.1) / INTRO_SECONDS);
       const k = easeInOutCubic(introT);
       // Swing round in an arc rather than a straight dolly.
       const arc = Math.sin(k * Math.PI) * 2.5;
@@ -351,9 +363,10 @@ export async function initScene(canvas, panelEl = document.getElementById('panel
     document.body.classList.remove('no-webgl');
   });
 
-  const gl = renderer.getContext();
-  const gpuInfo = gl.getExtension('WEBGL_debug_renderer_info');
-  console.info('[scene] WebGL ready:', gpuInfo ? gl.getParameter(gpuInfo.UNMASKED_RENDERER_WEBGL) : 'unknown GPU');
+  console.info('[scene] WebGL ready:', gpuName);
+  if (softwareGpu) {
+    console.warn('[scene] software rendering detected: using light mode. Turn on hardware acceleration in the browser settings for the full scene.');
+  }
 
   // Compile every shader up front (in parallel where the driver allows) instead of
   // stalling on the first frames while the page sits empty. Never wait forever on a driver.
