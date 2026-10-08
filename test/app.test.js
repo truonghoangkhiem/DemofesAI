@@ -73,27 +73,31 @@ test('evaluate accepts a 4000-character Vietnamese prompt', async () => {
   });
 });
 
-test('evaluate rejects bad input with 400', async () => {
+test('evaluate rejects bad input with 400 and a stable error code', async () => {
   const { gemini, calls } = fakeGemini();
   const bad = [
-    {},
-    { prompt: '' },
-    { prompt: '   ' },
-    { prompt: 42 },
-    { prompt: 'x'.repeat(4001) },
-    { prompt: 'p', clarifications: 'nope' },
-    { prompt: 'p', clarifications: Array.from({ length: 7 }, () => ({ question: 'q', answer: 'a' })) },
-    { prompt: 'p', clarifications: [{ question: 'q' }] },
-    { prompt: 'p', clarifications: [{ question: '', answer: 'a' }] },
-    { prompt: 'p', clarifications: [{ question: 'q', answer: 'a'.repeat(1001) }] },
-    { prompt: 'p', clarifications: [null] },
+    [{}, 'EMPTY_PROMPT'],
+    [{ prompt: '' }, 'EMPTY_PROMPT'],
+    [{ prompt: '   ' }, 'EMPTY_PROMPT'],
+    [{ prompt: 42 }, 'EMPTY_PROMPT'],
+    [{ prompt: 'x'.repeat(4001) }, 'PROMPT_TOO_LONG'],
+    [{ prompt: 'p', clarifications: 'nope' }, 'INVALID_INPUT'],
+    [{ prompt: 'p', clarifications: Array.from({ length: 7 }, () => ({ question: 'q', answer: 'a' })) }, 'INVALID_INPUT'],
+    [{ prompt: 'p', clarifications: [{ question: 'q' }] }, 'INVALID_INPUT'],
+    [{ prompt: 'p', clarifications: [{ question: '', answer: 'a' }] }, 'INVALID_INPUT'],
+    [{ prompt: 'p', clarifications: [{ question: 'q', answer: 'a'.repeat(1001) }] }, 'INVALID_INPUT'],
+    [{ prompt: 'p', clarifications: [null] }, 'INVALID_INPUT'],
   ];
   await withServer(gemini, async base => {
-    for (const body of bad) {
+    for (const [body, code] of bad) {
       const res = await post(base, '/api/evaluate', body);
       assert.equal(res.status, 400, JSON.stringify(body).slice(0, 80));
-      assert.equal(typeof (await res.json()).error, 'string');
+      const json = await res.json();
+      assert.equal(typeof json.error, 'string');
+      assert.equal(json.code, code, JSON.stringify(body).slice(0, 80));
     }
+    const tooLong = await (await post(base, '/api/evaluate', { prompt: 'x'.repeat(4001) })).json();
+    assert.deepEqual(tooLong.params, { max: 4000 });
   });
   assert.equal(calls.evaluate.length, 0);
 });
@@ -102,18 +106,39 @@ test('malformed JSON and missing body give 400', async () => {
   await withServer(fakeGemini().gemini, async base => {
     const malformed = await post(base, '/api/evaluate', null, { raw: '{"prompt":' });
     assert.equal(malformed.status, 400);
-    assert.match((await malformed.json()).error, /valid JSON/);
+    const json = await malformed.json();
+    assert.match(json.error, /valid JSON/);
+    assert.equal(json.code, 'BAD_JSON');
     const empty = await fetch(base + '/api/evaluate', { method: 'POST' });
     assert.equal(empty.status, 400);
   });
 });
 
-test('GeminiError becomes 502 with its message; other errors become a generic 500', async () => {
-  const failing = fakeGemini({ async evaluate() { throw new GeminiError('Gemini did not answer within 30 s.'); } });
+test('request bodies over the limit give 413 TOO_LARGE', async () => {
+  await withServer(fakeGemini().gemini, async base => {
+    const res = await post(base, '/api/evaluate', { prompt: 'x'.repeat(200_000) });
+    assert.equal(res.status, 413);
+    assert.equal((await res.json()).code, 'TOO_LARGE');
+  });
+});
+
+test('GeminiError becomes 502 with its message and code; other errors become a generic 500', async () => {
+  const failing = fakeGemini({
+    async evaluate() { throw new GeminiError('Gemini did not answer within 30 s.', { timeout: true, params: { seconds: 30 } }); },
+  });
   await withServer(failing.gemini, async base => {
     const res = await post(base, '/api/evaluate', { prompt: 'p' });
     assert.equal(res.status, 502);
-    assert.deepEqual(await res.json(), { error: 'Gemini did not answer within 30 s.' });
+    assert.deepEqual(await res.json(), {
+      error: 'Gemini did not answer within 30 s.',
+      code: 'GEMINI_TIMEOUT',
+      params: { seconds: 30 },
+    });
+  });
+  const unscored = fakeGemini({ async evaluate() { throw new GeminiError('could not score', { code: 'GEMINI_COULD_NOT_SCORE' }); } });
+  await withServer(unscored.gemini, async base => {
+    const res = await post(base, '/api/evaluate', { prompt: 'p' });
+    assert.deepEqual(await res.json(), { error: 'could not score', code: 'GEMINI_COULD_NOT_SCORE' });
   });
   const crashing = fakeGemini({ async evaluate() { throw new Error('secret internals'); } });
   const originalError = console.error;
@@ -122,7 +147,9 @@ test('GeminiError becomes 502 with its message; other errors become a generic 50
     await withServer(crashing.gemini, async base => {
       const res = await post(base, '/api/evaluate', { prompt: 'p' });
       assert.equal(res.status, 500);
-      assert.doesNotMatch((await res.json()).error, /secret/);
+      const json = await res.json();
+      assert.doesNotMatch(json.error, /secret/);
+      assert.equal(json.code, 'SERVER_ERROR');
     });
   } finally {
     console.error = originalError;
@@ -134,7 +161,7 @@ test('missing API key gives 500 with setup instructions', async () => {
     for (const path of ['/api/evaluate', '/api/try']) {
       const res = await post(base, path, { prompt: 'p', original: 'a', improved: 'b' });
       assert.equal(res.status, 500);
-      assert.deepEqual(await res.json(), { error: MISSING_KEY_MESSAGE });
+      assert.deepEqual(await res.json(), { error: MISSING_KEY_MESSAGE, code: 'MISSING_KEY' });
     }
   });
 });
@@ -148,7 +175,10 @@ async function readTry(res) {
     const side = (sides[event.side] ??= { text: '' });
     if (event.text) side.text += event.text;
     if (event.done) side.done = true;
-    if (event.error) side.error = event.error;
+    if (event.error) {
+      side.error = event.error;
+      side.code = event.code;
+    }
   }
   return sides;
 }
@@ -171,7 +201,7 @@ test('try keeps the successful side when the other fails, including partial text
     async streamPrompt(prompt, onText) {
       if (prompt === 'A') {
         onText('half ');
-        throw new GeminiError('Gemini did not answer within 90 s.');
+        throw new GeminiError('Gemini did not answer within 90 s.', { timeout: true });
       }
       if (prompt === 'C') throw new Error('secret internals');
       onText('good');
@@ -180,11 +210,11 @@ test('try keeps the successful side when the other fails, including partial text
   await withServer(gemini, async base => {
     const res = await post(base, '/api/try', { original: 'A', improved: 'B' });
     assert.deepEqual(await readTry(res), {
-      original: { text: 'half ', error: 'Gemini did not answer within 90 s.' },
+      original: { text: 'half ', error: 'Gemini did not answer within 90 s.', code: 'GEMINI_TIMEOUT' },
       improved: { text: 'good', done: true },
     });
     const hidden = await readTry(await post(base, '/api/try', { original: 'C', improved: 'B' }));
-    assert.deepEqual(hidden.original, { text: '', error: 'Gemini request failed.' });
+    assert.deepEqual(hidden.original, { text: '', error: 'Gemini request failed.', code: 'GEMINI_FAILED' });
   });
 });
 
@@ -214,9 +244,15 @@ test('try cancels Gemini streams when the client disconnects', async () => {
 
 test('try rejects missing or oversized prompts', async () => {
   await withServer(fakeGemini().gemini, async base => {
-    for (const body of [{ original: 'a' }, { original: '', improved: 'b' }, { original: 'a'.repeat(4001), improved: 'b' }, { original: 'a', improved: 'b'.repeat(8001) }]) {
+    for (const [body, code] of [
+      [{ original: 'a' }, 'EMPTY_PROMPT'],
+      [{ original: '', improved: 'b' }, 'EMPTY_PROMPT'],
+      [{ original: 'a'.repeat(4001), improved: 'b' }, 'PROMPT_TOO_LONG'],
+      [{ original: 'a', improved: 'b'.repeat(8001) }, 'PROMPT_TOO_LONG'],
+    ]) {
       const res = await post(base, '/api/try', body);
       assert.equal(res.status, 400);
+      assert.equal((await res.json()).code, code);
     }
   });
 });
@@ -236,7 +272,7 @@ test('unknown API routes give a JSON 404', async () => {
   await withServer(fakeGemini().gemini, async base => {
     const res = await fetch(base + '/api/nope');
     assert.equal(res.status, 404);
-    assert.deepEqual(await res.json(), { error: 'Not found.' });
+    assert.deepEqual(await res.json(), { error: 'Not found.', code: 'NOT_FOUND' });
   });
 });
 
@@ -252,7 +288,9 @@ test('other body-parser client errors keep their status as JSON', async () => {
         body: '{"prompt":"p"}',
       });
       assert.equal(charset.status, 415);
-      assert.equal(typeof (await charset.json()).error, 'string');
+      const json = await charset.json();
+      assert.equal(typeof json.error, 'string');
+      assert.equal(json.code, 'BAD_REQUEST');
       const encoding = await fetch(base + '/api/evaluate', {
         method: 'POST',
         headers: { 'content-type': 'application/json', 'content-encoding': 'bogus' },

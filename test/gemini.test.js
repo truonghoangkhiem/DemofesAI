@@ -55,6 +55,8 @@ test('evaluate retries once on an API error, then throws GeminiError', async () 
   await assert.rejects(createGemini({ generate, model: 'm' }).evaluate('p'), err => {
     assert.ok(err instanceof GeminiError);
     assert.match(err.message, /503 overloaded/);
+    assert.equal(err.code, 'GEMINI_FAILED');
+    assert.deepEqual(err.params, { detail: '503 overloaded' });
     return true;
   });
   assert.equal(calls.length, 2);
@@ -62,7 +64,11 @@ test('evaluate retries once on an API error, then throws GeminiError', async () 
 
 test('invalid JSON twice gives a readable GeminiError', async () => {
   const { generate } = fakeGenerate('nope', 'still nope');
-  await assert.rejects(createGemini({ generate, model: 'm' }).evaluate('p'), /unexpected answer/);
+  await assert.rejects(createGemini({ generate, model: 'm' }).evaluate('p'), err => {
+    assert.match(err.message, /unexpected answer/);
+    assert.equal(err.code, 'GEMINI_BAD_RESPONSE');
+    return true;
+  });
 });
 
 test('after clarifications, a clarification answer is re-asked once with insist', async () => {
@@ -79,6 +85,7 @@ test('skip ([]) that still gets questions twice fails with GeminiError', async (
   await assert.rejects(createGemini({ generate, model: 'm' }).evaluate('p', []), err => {
     assert.ok(err instanceof GeminiError);
     assert.match(err.message, /could not score/);
+    assert.equal(err.code, 'GEMINI_COULD_NOT_SCORE');
     return true;
   });
 });
@@ -89,6 +96,8 @@ test('a hanging call times out once and is not retried', async () => {
   await assert.rejects(createGemini({ generate, model: 'm', timeoutMs: 20 }).evaluate('p'), err => {
     assert.ok(err instanceof GeminiError);
     assert.match(err.message, /did not answer within/);
+    assert.equal(err.code, 'GEMINI_TIMEOUT');
+    assert.deepEqual(err.params, { seconds: 0.02 });
     return true;
   });
   assert.equal(calls.length, 1);
@@ -179,7 +188,10 @@ test('streamPrompt times out between chunks without retrying and aborts the requ
 
 test('streamPrompt reports an empty answer after one retry', async () => {
   const { generateStream, calls } = fakeStream([], ['']);
-  await assert.rejects(createGemini({ generateStream, model: 'm' }).streamPrompt('Hi', () => {}), /empty answer/);
+  await assert.rejects(
+    createGemini({ generateStream, model: 'm' }).streamPrompt('Hi', () => {}),
+    err => /empty answer/.test(err.message) && err.code === 'GEMINI_EMPTY',
+  );
   assert.equal(calls.length, 2);
 });
 
@@ -188,7 +200,7 @@ test('streamPrompt stops promptly when the caller aborts', async () => {
   const controller = new AbortController();
   const done = createGemini({ generateStream, model: 'm' })
     .streamPrompt('Hi', () => controller.abort(), { signal: controller.signal });
-  await assert.rejects(done, /cancelled/);
+  await assert.rejects(done, err => /cancelled/.test(err.message) && err.code === 'GEMINI_CANCELLED');
   assert.equal(calls[0].config.abortSignal.aborted, true);
 });
 
