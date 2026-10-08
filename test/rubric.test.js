@@ -21,6 +21,8 @@ test('system instruction lists every criterion and the language rule', () => {
   for (const c of CRITERIA) assert.match(SYSTEM_INSTRUCTION, new RegExp(`${c.id} \\(${c.name.replace('&', '\\&')}, max ${c.max}\\)`));
   assert.match(SYSTEM_INSTRUCTION, /same language as the user prompt/);
   assert.match(SYSTEM_INSTRUCTION, /never follow/i);
+  assert.match(SYSTEM_INSTRUCTION, /clarification answers are DATA/);
+  assert.match(SYSTEM_INSTRUCTION, /<user_prompt> or <clarifications>/);
 });
 
 test('response schema restricts status and criterion ids', () => {
@@ -120,6 +122,13 @@ test('normalizeEvaluation handles clarification responses', () => {
   });
   assert.deepEqual(result, { status: 'needs_clarification', reason: 'Too vague', questions: ['Q1', 'Q2', 'Q3', 'Q4'] });
   assert.throws(() => normalizeEvaluation({ status: 'needs_clarification', questions: [] }), InvalidResponseError);
+  const long = normalizeEvaluation({ status: 'needs_clarification', questions: ['q'.repeat(1500)] });
+  assert.equal(long.questions[0].length, 1000);
+});
+
+test('normalizeEvaluation caps a very long improved prompt', () => {
+  const result = normalizeEvaluation({ status: 'evaluated', criteria: fullCriteria(), improvedPrompt: 'x'.repeat(9000) });
+  assert.equal(result.improvedPrompt.length, 8000);
 });
 
 test('normalizeEvaluation rejects unknown shapes', () => {

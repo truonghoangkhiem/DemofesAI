@@ -35,10 +35,11 @@ function show(view) {
   if (window.matchMedia('(max-width: 800px)').matches) $('panel').scrollIntoView({ block: 'start' });
 }
 
+// #status stays in the accessibility tree (only visually hidden when idle) so its live region is announced.
 function setBusy(on, text = 'Sensei is thinking…') {
   state.busy = on;
-  $('status').hidden = !on;
-  $('status-text').textContent = text;
+  $('status').classList.toggle('sr-only', !on);
+  $('status-text').textContent = on ? text : '';
   for (const el of $('panel').querySelectorAll('button, textarea')) el.disabled = on;
 }
 
@@ -133,6 +134,7 @@ function renderResult(data) {
   void hanko.offsetWidth; // restart the stamp animation
   hanko.style.animation = '';
   countUp(hanko, data.overall);
+  hanko.setAttribute('aria-label', `Overall score: ${data.overall} out of 100`);
   $('score-title').textContent = titleFor(data.overall);
   $('score-subtitle').textContent = `${data.overall} / 100`;
 
@@ -163,6 +165,7 @@ function renderResult(data) {
   $('improved-prompt').textContent = data.improvedPrompt;
 
   show('result');
+  $('score-title').focus();
   scene.setMood(moodFor(data.overall));
   scene.showScore(data.overall);
 }
@@ -206,6 +209,7 @@ async function tryIt() {
     fail(err);
   } finally {
     setBusy(false);
+    $('compare-title').focus();
   }
 }
 
@@ -259,12 +263,17 @@ $('copy-btn').addEventListener('click', async () => {
   }
 });
 $('use-btn').addEventListener('click', () => {
-  $('prompt-input').value = state.result.improvedPrompt.slice(0, MAX_CHARS);
+  const improved = state.result.improvedPrompt;
+  $('prompt-input').value = improved.slice(0, MAX_CHARS);
   goToInput();
+  if (improved.length > MAX_CHARS) {
+    showToast(`The improved prompt was cut to ${MAX_CHARS} characters. Check the end before evaluating.`);
+  }
 });
 $('try-btn').addEventListener('click', tryIt);
 $('back-btn').addEventListener('click', () => {
   show('result');
+  $('score-title').focus();
   scene.setMood(moodFor(state.result.overall));
 });
 for (const button of document.querySelectorAll('.restart')) {

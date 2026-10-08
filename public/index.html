@@ -7,6 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@500;800&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%A6%8A%3C/text%3E%3C/svg%3E">
   <link rel="stylesheet" href="styles.css">
   <script type="importmap">
     {
@@ -30,7 +31,7 @@
   </header>
 
   <main class="panel" id="panel">
-    <p class="status" id="status" role="status" hidden><span class="spinner" aria-hidden="true"></span><span id="status-text">Sensei is thinking…</span></p>
+    <p class="status sr-only" id="status" role="status"><span class="spinner" aria-hidden="true"></span><span id="status-text"></span></p>
 
     <section data-view="input">
       <h2>Write your prompt</h2>
@@ -57,9 +58,9 @@
 
     <section data-view="result" hidden>
       <div class="score-head">
-        <div class="hanko" id="overall-score" aria-label="Overall score">0</div>
+        <div class="hanko" id="overall-score" role="img" aria-label="Overall score">0</div>
         <div>
-          <h2 id="score-title">Score</h2>
+          <h2 id="score-title" tabindex="-1">Score</h2>
           <p id="score-subtitle" class="muted"></p>
         </div>
       </div>
@@ -80,7 +81,7 @@
     </section>
 
     <section data-view="compare" hidden>
-      <h2>Same AI, two prompts</h2>
+      <h2 id="compare-title" tabindex="-1">Same AI, two prompts</h2>
       <div class="compare">
         <article class="column">
           <h3>Original prompt</h3>

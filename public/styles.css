@@ -56,6 +56,7 @@ body {
 .panel.wide { width: min(940px, calc(100vw - 32px)); }
 
 h2 { font: 800 24px/1.25 var(--font-display); margin: 0 0 8px; }
+h2:focus { outline: none; }
 h3 {
   font: 800 14px var(--font-display);
   margin: 22px 0 8px;
@@ -173,6 +174,11 @@ details summary { cursor: pointer; font-weight: 700; color: var(--ink-soft); mar
   box-shadow: 4px 4px 0 var(--ink);
   font-weight: 700;
   z-index: 10;
+}
+/* On wide screens keep the toast in the scene area, left of the panel. */
+@media (min-width: 801px) {
+  .toast { right: calc(var(--panel-w) + 48px); }
+  body:has(.panel.wide) .toast { right: calc(min(940px, 100vw - 32px) + 48px); min-width: 220px; }
 }
 .toast.success { background: var(--matcha); }
 .toast button { background: none; border: none; color: inherit; font-size: 22px; line-height: 1; cursor: pointer; }

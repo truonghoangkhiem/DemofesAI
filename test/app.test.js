@@ -165,9 +165,54 @@ test('try returns the successful side when the other fails', async () => {
 
 test('try rejects missing or oversized prompts', async () => {
   await withServer(fakeGemini().gemini, async base => {
-    for (const body of [{ original: 'a' }, { original: '', improved: 'b' }, { original: 'a', improved: 'b'.repeat(4001) }]) {
+    for (const body of [{ original: 'a' }, { original: '', improved: 'b' }, { original: 'a'.repeat(4001), improved: 'b' }, { original: 'a', improved: 'b'.repeat(8001) }]) {
       const res = await post(base, '/api/try', body);
       assert.equal(res.status, 400);
     }
   });
+});
+
+test('try accepts an improved prompt longer than the input limit', async () => {
+  const { gemini, calls } = fakeGemini();
+  await withServer(gemini, async base => {
+    const ok = await post(base, '/api/try', { original: 'a', improved: 'b'.repeat(6000) });
+    assert.equal(ok.status, 200);
+    const tooLong = await post(base, '/api/try', { original: 'a', improved: 'b'.repeat(8001) });
+    assert.equal(tooLong.status, 400);
+  });
+  assert.equal(calls.runPrompt.length, 2);
+});
+
+test('unknown API routes give a JSON 404', async () => {
+  await withServer(fakeGemini().gemini, async base => {
+    const res = await fetch(base + '/api/nope');
+    assert.equal(res.status, 404);
+    assert.deepEqual(await res.json(), { error: 'Not found.' });
+  });
+});
+
+test('other body-parser client errors keep their status as JSON', async () => {
+  const originalError = console.error;
+  const logged = [];
+  console.error = (...args) => logged.push(args);
+  try {
+    await withServer(fakeGemini().gemini, async base => {
+      const charset = await fetch(base + '/api/evaluate', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json; charset=latin1' },
+        body: '{"prompt":"p"}',
+      });
+      assert.equal(charset.status, 415);
+      assert.equal(typeof (await charset.json()).error, 'string');
+      const encoding = await fetch(base + '/api/evaluate', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'content-encoding': 'bogus' },
+        body: '{"prompt":"p"}',
+      });
+      assert.equal(encoding.status, 415);
+    });
+  } finally {
+    console.error = originalError;
+  }
+  assert.equal(logged.length, 0);
 });

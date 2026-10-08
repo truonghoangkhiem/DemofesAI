@@ -4,7 +4,7 @@ import { createMascot } from './mascot.js';
 
 const MOBILE_QUERY = '(max-width: 800px)';
 
-export function initScene(canvas) {
+export function initScene(canvas, panelEl = document.getElementById('panel')) {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -23,6 +23,7 @@ export function initScene(canvas) {
   scene.add(mascot.group);
 
   // On desktop the UI panel covers the right side, so shift the view to keep Sensei visible.
+  // The panel's real width is used because the compare view widens it.
   function resize() {
     const width = canvas.clientWidth;
     const height = canvas.clientHeight;
@@ -31,12 +32,15 @@ export function initScene(canvas) {
     camera.aspect = width / height;
     const mobile = window.matchMedia(MOBILE_QUERY).matches;
     camera.position.set(0, mobile ? 2.0 : 2.3, mobile ? 6.2 : 7.2);
-    const panel = mobile ? 0 : Math.min(520, window.innerWidth * 0.45) + 16;
+    const panelWidth = panelEl ? panelEl.offsetWidth : Math.min(520, window.innerWidth * 0.45);
+    const panel = mobile ? 0 : Math.min(panelWidth + 16, width * 0.75);
     if (panel) camera.setViewOffset(width, height, panel / 2, 0, width, height);
     else camera.clearViewOffset();
     camera.updateProjectionMatrix();
   }
-  new ResizeObserver(resize).observe(canvas);
+  const observer = new ResizeObserver(resize);
+  observer.observe(canvas);
+  if (panelEl) observer.observe(panelEl);
   resize();
 
   // THREE.Clock is deprecated in r186; Timer resets itself when the tab becomes visible again.

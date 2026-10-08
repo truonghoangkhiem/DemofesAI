@@ -88,6 +88,14 @@ test('a hanging call times out, retries, then throws GeminiError', async () => {
   const generate = request => { calls.push(request); return new Promise(() => {}); };
   await assert.rejects(createGemini({ generate, model: 'm', timeoutMs: 20 }).evaluate('p'), /did not answer within/);
   assert.equal(calls.length, 2);
+  for (const call of calls) assert.equal(call.config.abortSignal.aborted, true);
+});
+
+test('a successful call is not aborted', async () => {
+  const { generate, calls } = fakeGenerate('Answer text');
+  await createGemini({ generate, model: 'm', timeoutMs: 20 }).runPrompt('Hello');
+  await new Promise(resolve => setTimeout(resolve, 40));
+  assert.equal(calls[0].config.abortSignal.aborted, false);
 });
 
 test('runPrompt sends the raw prompt with no system instruction', async () => {
