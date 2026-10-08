@@ -1,125 +1,252 @@
 import * as THREE from 'three';
 import { part, toon } from './toon.js';
 
-const PETALS = 220;
-const BURST = 70;
-const AREA = { x: 9, yTop: 7, zMin: -8, zMax: 4 };
+const PETALS = 280;
+const BURST = 90;
+const AREA = { x: 10, yTop: 8, zMin: -9, zMax: 4.5 };
 
 function skyTexture() {
   const canvas = document.createElement('canvas');
   canvas.width = 2;
-  canvas.height = 256;
+  canvas.height = 512;
   const ctx = canvas.getContext('2d');
-  const gradient = ctx.createLinearGradient(0, 0, 0, 256);
-  gradient.addColorStop(0, '#9ed4f0');
-  gradient.addColorStop(0.55, '#fde2e4');
-  gradient.addColorStop(1, '#ffd6a8');
+  const gradient = ctx.createLinearGradient(0, 0, 0, 512);
+  gradient.addColorStop(0, '#90c6f8'); // Soft anime sky blue
+  gradient.addColorStop(0.42, '#ffd5df'); // Sakura blush
+  gradient.addColorStop(0.78, '#ffe7cf'); // Warm sunrise peach
+  gradient.addColorStop(1, '#ffcfa8'); // Golden morning horizon
   ctx.fillStyle = gradient;
-  ctx.fillRect(0, 0, 2, 256);
+  ctx.fillRect(0, 0, 2, 512);
+
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
   return texture;
 }
 
-function torii() {
-  const gate = new THREE.Group();
-  const RED = 0xd7263d;
-  for (const x of [-1.5, 1.5]) {
-    const pillar = part(new THREE.CylinderGeometry(0.17, 0.21, 3.3, 20), RED, { outline: 0.06 });
-    pillar.position.set(x, 1.65, 0);
-    gate.add(pillar);
-    const foot = part(new THREE.CylinderGeometry(0.26, 0.26, 0.25, 20), 0x2b1d1a, { outline: 0 });
-    foot.position.set(x, 0.12, 0);
-    gate.add(foot);
-  }
-  const kasagi = part(new THREE.BoxGeometry(4.4, 0.24, 0.42), 0x2b1d1a, { outline: 0 });
-  kasagi.position.y = 3.5;
-  gate.add(kasagi);
-  const shimaki = part(new THREE.BoxGeometry(4.0, 0.2, 0.36), RED, { outline: 0.03 });
-  shimaki.position.y = 3.3;
-  gate.add(shimaki);
-  const nuki = part(new THREE.BoxGeometry(3.6, 0.18, 0.24), RED, { outline: 0.03 });
-  nuki.position.y = 2.65;
-  gate.add(nuki);
-  const gakuzuka = part(new THREE.BoxGeometry(0.22, 0.6, 0.2), RED, { outline: 0.05 });
-  gakuzuka.position.y = 2.98;
-  gate.add(gakuzuka);
-  return gate;
-}
-
-function lantern() {
-  const STONE = 0xa9a39a;
+// 3D Fluffy Anime Cloud
+function createCloud(scale = 1) {
   const group = new THREE.Group();
-  const base = part(new THREE.CylinderGeometry(0.32, 0.38, 0.2, 8), STONE);
-  base.position.y = 0.1;
-  const pole = part(new THREE.CylinderGeometry(0.1, 0.12, 0.8, 8), STONE);
-  pole.position.y = 0.6;
-  const deck = part(new THREE.BoxGeometry(0.6, 0.12, 0.6), STONE);
-  deck.position.y = 1.05;
-  const light = part(new THREE.BoxGeometry(0.42, 0.38, 0.42), 0xffd27a, { emissive: 0xffb347, emissiveIntensity: 0.9 });
-  light.position.y = 1.3;
-  const roof = part(new THREE.ConeGeometry(0.56, 0.38, 4), STONE);
-  roof.rotation.y = Math.PI / 4;
-  roof.position.y = 1.68;
-  const knob = part(new THREE.SphereGeometry(0.08, 12, 8), STONE);
-  knob.position.y = 1.92;
-  group.add(base, pole, deck, light, roof, knob);
-  const glow = new THREE.PointLight(0xffb36b, 1.2, 3, 2);
-  glow.position.y = 1.3;
-  group.add(glow);
+  const CLOUD_COLOR = 0xffffff;
+  const puffs = [
+    [0, 0, 0, 1.2],
+    [-0.9, -0.2, 0.1, 0.85],
+    [0.9, -0.15, -0.1, 0.9],
+    [-0.4, 0.45, 0.1, 0.75],
+    [0.5, 0.4, -0.05, 0.8],
+    [1.4, -0.3, 0, 0.65],
+    [-1.4, -0.3, 0, 0.6],
+  ];
+
+  for (const [x, y, z, r] of puffs) {
+    const puff = part(new THREE.SphereGeometry(r, 16, 12), CLOUD_COLOR, { outline: 0 });
+    puff.position.set(x, y, z);
+    group.add(puff);
+  }
+
+  group.scale.setScalar(scale);
   return group;
 }
 
-function sakuraTree(scale = 1) {
+// Iconic Mount Fuji with snow cap
+function createMountFuji() {
+  const group = new THREE.Group();
+  const body = new THREE.Mesh(
+    new THREE.ConeGeometry(16, 10, 48, 1, true),
+    new THREE.MeshBasicMaterial({ color: 0x7e94be, fog: false }),
+  );
+  body.position.y = 5.0;
+
+  const snowCap = new THREE.Mesh(
+    new THREE.ConeGeometry(5.4, 3.4, 48),
+    new THREE.MeshBasicMaterial({ color: 0xffffff, fog: false }),
+  );
+  snowCap.position.y = 8.3;
+
+  group.add(body, snowCap);
+  group.position.set(-6.5, -0.8, -45);
+  return group;
+}
+
+// Vermillion Japanese Torii Gate with Shimenawa sacred rope
+function createTorii() {
+  const gate = new THREE.Group();
+  const RED = 0xd7263d;
+  const DARK = 0x241816;
+  const GOLD = 0xffc83b;
+
+  // Twin pillars
+  for (const x of [-1.6, 1.6]) {
+    const pillar = part(new THREE.CylinderGeometry(0.18, 0.22, 3.5, 20), RED, { outline: 0.05 });
+    pillar.position.set(x, 1.75, 0);
+    gate.add(pillar);
+
+    // Stone foot (Kamebara)
+    const foot = part(new THREE.CylinderGeometry(0.28, 0.28, 0.28, 20), DARK, { outline: 0 });
+    foot.position.set(x, 0.14, 0);
+    gate.add(foot);
+
+    // Gold collar ring
+    const collar = part(new THREE.CylinderGeometry(0.23, 0.23, 0.06, 16), GOLD, { outline: 0 });
+    collar.position.set(x, 3.25, 0);
+    gate.add(collar);
+  }
+
+  // Kasagi (top beam with gentle curve)
+  const kasagi = part(new THREE.BoxGeometry(4.7, 0.26, 0.44), DARK, { outline: 0.02 });
+  kasagi.position.y = 3.65;
+  gate.add(kasagi);
+
+  // Shimaki (second top beam)
+  const shimaki = part(new THREE.BoxGeometry(4.25, 0.22, 0.38), RED, { outline: 0.03 });
+  shimaki.position.y = 3.42;
+  gate.add(shimaki);
+
+  // Nuki (tie beam)
+  const nuki = part(new THREE.BoxGeometry(3.85, 0.2, 0.25), RED, { outline: 0.03 });
+  nuki.position.y = 2.75;
+  gate.add(nuki);
+
+  // Gakuzuka plaque
+  const gakuzuka = part(new THREE.BoxGeometry(0.24, 0.65, 0.22), RED, { outline: 0.04 });
+  gakuzuka.position.y = 3.08;
+  gate.add(gakuzuka);
+
+  // Shimenawa (sacred twisted rope with paper tassels)
+  const shimenawa = part(new THREE.CylinderGeometry(0.06, 0.09, 3.2, 12), 0xd6ba85, { outline: 0 });
+  shimenawa.rotation.z = Math.PI / 2;
+  shimenawa.position.set(0, 2.52, 0.12);
+  gate.add(shimenawa);
+
+  // Shide paper zigzags hanging from rope
+  const shideTassels = [];
+  for (const x of [-0.8, 0, 0.8]) {
+    const shide = part(new THREE.BoxGeometry(0.12, 0.38, 0.02), 0xffffff, { outline: 0.02 });
+    shide.position.set(x, 2.26, 0.14);
+    gate.add(shide);
+    shideTassels.push(shide);
+  }
+
+  return { gate, shideTassels };
+}
+
+// Japanese Stone Lantern (Tōrō 石灯籠) with glowing paper windows
+function createLantern() {
+  const STONE = 0xada89e;
+  const group = new THREE.Group();
+
+  const base = part(new THREE.CylinderGeometry(0.34, 0.4, 0.22, 8), STONE);
+  base.position.y = 0.11;
+
+  const pole = part(new THREE.CylinderGeometry(0.11, 0.13, 0.85, 8), STONE);
+  pole.position.y = 0.64;
+
+  const deck = part(new THREE.BoxGeometry(0.64, 0.14, 0.64), STONE);
+  deck.position.y = 1.12;
+
+  // Glowing shoji light window
+  const lightBox = part(new THREE.BoxGeometry(0.44, 0.42, 0.44), 0xffe099, {
+    emissive: 0xffaa33,
+    emissiveIntensity: 0.95,
+  });
+  lightBox.position.y = 1.4;
+
+  const roof = part(new THREE.ConeGeometry(0.6, 0.4, 4), STONE);
+  roof.rotation.y = Math.PI / 4;
+  roof.position.y = 1.82;
+
+  const finial = part(new THREE.SphereGeometry(0.09, 12, 8), STONE);
+  finial.position.y = 2.08;
+
+  group.add(base, pole, deck, lightBox, roof, finial);
+
+  // Warm glowing point light
+  const glow = new THREE.PointLight(0xffae52, 1.4, 3.8, 2);
+  glow.position.y = 1.4;
+  group.add(glow);
+
+  return { group, glow };
+}
+
+// Sculpted Cherry Blossom (Sakura 桜) Tree with animated canopy puffs
+function createSakuraTree(scale = 1) {
   const tree = new THREE.Group();
-  const BARK = 0x6b4a3a;
-  const trunk = part(new THREE.CylinderGeometry(0.16, 0.26, 2.2, 10), BARK);
-  trunk.position.y = 1.1;
+  const BARK = 0x614132;
+
+  const trunk = part(new THREE.CylinderGeometry(0.18, 0.3, 2.4, 10), BARK);
+  trunk.position.y = 1.2;
   trunk.rotation.z = 0.08;
   tree.add(trunk);
-  for (const [x, y, z, rz] of [[-0.45, 2.0, 0, 0.8], [0.5, 2.1, 0.1, -0.7], [0, 2.3, -0.4, 0.1]]) {
-    const branch = part(new THREE.CylinderGeometry(0.06, 0.1, 1.0, 8), BARK);
+
+  // Main twisting branches
+  const branches = [
+    [-0.5, 2.2, 0.05, 0.75],
+    [0.55, 2.3, 0.12, -0.68],
+    [0.05, 2.5, -0.45, 0.15],
+  ];
+  for (const [x, y, z, rz] of branches) {
+    const branch = part(new THREE.CylinderGeometry(0.07, 0.12, 1.1, 8), BARK);
     branch.position.set(x, y, z);
     branch.rotation.z = rz;
     tree.add(branch);
   }
-  const blossoms = [
-    [0, 2.9, 0, 0.95, 0xffc4d0], [-0.9, 2.6, 0.1, 0.7, 0xffb7c5], [0.9, 2.65, 0.2, 0.72, 0xffd1dc],
-    [-0.4, 3.4, -0.2, 0.65, 0xffd1dc], [0.5, 3.3, -0.3, 0.68, 0xffb7c5], [0.1, 2.5, 0.6, 0.6, 0xffc4d0],
-    [-0.7, 2.3, -0.5, 0.5, 0xffd1dc],
+
+  // Lush anime cherry blossom canopy puffs
+  const canopyGroup = new THREE.Group();
+  const blossomClusters = [
+    [0, 3.1, 0, 1.05, 0xffc4d0],
+    [-0.95, 2.8, 0.15, 0.8, 0xffb5c3],
+    [0.98, 2.85, 0.22, 0.82, 0xffd2dd],
+    [-0.45, 3.65, -0.22, 0.75, 0xffd4de],
+    [0.55, 3.55, -0.32, 0.78, 0xffb8c6],
+    [0.15, 2.7, 0.68, 0.7, 0xffc8d3],
+    [-0.75, 2.45, -0.55, 0.6, 0xffd2dc],
+    [0.72, 2.4, -0.45, 0.58, 0xffb8c6],
   ];
-  for (const [x, y, z, r, color] of blossoms) {
-    const puff = part(new THREE.IcosahedronGeometry(r, 1), color, { outline: 0.04 });
+
+  const puffMeshes = [];
+  for (const [x, y, z, r, color] of blossomClusters) {
+    const puff = part(new THREE.IcosahedronGeometry(r, 1), color, { outline: 0.035 });
     puff.position.set(x, y, z);
-    tree.add(puff);
+    canopyGroup.add(puff);
+    puffMeshes.push(puff);
   }
+
+  tree.add(canopyGroup);
   tree.scale.setScalar(scale);
-  return tree;
+
+  return { tree, canopyGroup, puffMeshes };
 }
 
-// Small five-petal flower with a short stem, for the foreground lawn.
-function flower(color) {
+// Wildflowers & Grass
+function createFlower(color) {
   const group = new THREE.Group();
-  const stem = part(new THREE.CylinderGeometry(0.015, 0.015, 0.22, 6), 0x4f9a45, { outline: 0 });
-  stem.position.y = 0.11;
+  const stem = part(new THREE.CylinderGeometry(0.015, 0.015, 0.24, 6), 0x4f9a45, { outline: 0 });
+  stem.position.y = 0.12;
   group.add(stem);
+
   for (let i = 0; i < 5; i++) {
     const a = (i / 5) * Math.PI * 2;
-    const petal = part(new THREE.SphereGeometry(0.055, 10, 8), color, { outline: 0 });
-    petal.scale.set(1, 0.5, 1);
-    petal.position.set(Math.cos(a) * 0.06, 0.23, Math.sin(a) * 0.06);
+    const petal = part(new THREE.SphereGeometry(0.06, 10, 8), color, { outline: 0 });
+    petal.scale.set(1, 0.45, 1);
+    petal.position.set(Math.cos(a) * 0.065, 0.24, Math.sin(a) * 0.065);
     group.add(petal);
   }
-  const centre = part(new THREE.SphereGeometry(0.035, 10, 8), 0xffd23f, { outline: 0 });
-  centre.position.y = 0.25;
+
+  const centre = part(new THREE.SphereGeometry(0.038, 10, 8), 0xffd23f, { outline: 0 });
+  centre.position.y = 0.26;
   group.add(centre);
   return group;
 }
 
-function grassTuft() {
+function createGrassTuft() {
   const group = new THREE.Group();
-  for (const [x, rz, h] of [[-0.05, 0.3, 0.28], [0, 0, 0.36], [0.05, -0.3, 0.26]]) {
-    const blade = part(new THREE.ConeGeometry(0.035, h, 5), 0x5fae4e, { outline: 0 });
+  for (const [x, rz, h] of [
+    [-0.06, 0.32, 0.3],
+    [0, 0, 0.38],
+    [0.06, -0.32, 0.28],
+    [-0.03, 0.15, 0.34],
+  ]) {
+    const blade = part(new THREE.ConeGeometry(0.035, h, 5), 0x5ea848, { outline: 0 });
     blade.position.set(x, h / 2, 0);
     blade.rotation.z = rz;
     group.add(blade);
@@ -127,77 +254,163 @@ function grassTuft() {
   return group;
 }
 
-function mountain() {
+// Floating Spirit Fireflies (Kitsunebi 狐火)
+function createSpiritFireflies() {
   const group = new THREE.Group();
-  const body = new THREE.Mesh(new THREE.ConeGeometry(14, 9, 48, 1, true), new THREE.MeshBasicMaterial({ color: 0x8fa8d8, fog: false }));
-  body.position.y = 4.5;
-  const cap = new THREE.Mesh(new THREE.ConeGeometry(4.7, 3.05, 48), new THREE.MeshBasicMaterial({ color: 0xffffff, fog: false }));
-  cap.position.y = 7.5;
-  group.add(body, cap);
-  group.position.set(-6, -1, -42);
-  return group;
+  const fireflies = [];
+  const COUNT = 8;
+
+  for (let i = 0; i < COUNT; i++) {
+    const color = i % 2 === 0 ? 0xffea78 : 0x78eaff;
+    const mesh = new THREE.Mesh(
+      new THREE.SphereGeometry(0.06, 12, 8),
+      new THREE.MeshBasicMaterial({ color }),
+    );
+    const light = new THREE.PointLight(color, 0.8, 2.5);
+    mesh.add(light);
+    group.add(mesh);
+
+    fireflies.push({
+      mesh,
+      light,
+      baseX: (Math.random() - 0.5) * 7,
+      baseY: 0.8 + Math.random() * 2.5,
+      baseZ: -1.5 - Math.random() * 5,
+      speed: 0.8 + Math.random() * 0.8,
+      phase: Math.random() * Math.PI * 2,
+    });
+  }
+
+  return { group, fireflies };
 }
 
 export function createGarden(scene) {
   scene.background = skyTexture();
-  scene.fog = new THREE.Fog(0xfde2e4, 14, 34);
+  scene.fog = new THREE.Fog(0xfde2e4, 15, 38);
 
-  const ground = new THREE.Mesh(new THREE.CircleGeometry(16, 64), toon(0x9fd48b));
+  // Mount Fuji in the distance
+  scene.add(createMountFuji());
+
+  // Fleet of Drifting 3D Anime Clouds
+  const clouds = [];
+  const cloudConfigs = [
+    { x: -8, y: 7.2, z: -28, scale: 2.2, speed: 0.22 },
+    { x: 2, y: 8.5, z: -32, scale: 2.6, speed: 0.18 },
+    { x: 10, y: 6.8, z: -25, scale: 2.0, speed: 0.25 },
+    { x: -14, y: 6.0, z: -20, scale: 1.8, speed: 0.3 },
+  ];
+
+  for (const cfg of cloudConfigs) {
+    const cloud = createCloud(cfg.scale);
+    cloud.position.set(cfg.x, cfg.y, cfg.z);
+    scene.add(cloud);
+    clouds.push({ ...cfg, obj: cloud });
+  }
+
+  // Grassy Shrine Island ground
+  const ground = new THREE.Mesh(new THREE.CircleGeometry(16, 64), toon(0x9bd186));
   ground.rotation.x = -Math.PI / 2;
   scene.add(ground);
 
+  // Stepping stones path
   const path = new THREE.Group();
-  for (let i = 0; i < 6; i++) {
-    const stone = part(new THREE.CylinderGeometry(0.34, 0.38, 0.06, 10), 0xd8d2c4, { outline: 0.03 });
-    stone.position.set(Math.sin(i * 1.3) * 0.25, 0.03, -0.9 - i * 0.75);
-    stone.rotation.y = i;
+  for (let i = 0; i < 7; i++) {
+    const stone = part(new THREE.CylinderGeometry(0.36, 0.4, 0.07, 10), 0xdcd6c8, { outline: 0.03 });
+    stone.position.set(Math.sin(i * 1.25) * 0.28, 0.035, -0.8 - i * 0.72);
+    stone.rotation.y = i * 0.8;
     path.add(stone);
   }
   scene.add(path);
 
-  const gate = torii();
-  gate.position.set(0, 0, -5.6);
+  // Torii gate
+  const { gate, shideTassels } = createTorii();
+  gate.position.set(0, 0, -5.8);
   scene.add(gate);
 
-  for (const x of [-2.2, 2.2]) {
-    const l = lantern();
-    l.position.set(x, 0, -1.8);
-    scene.add(l);
+  // Twin Stone Lanterns
+  const lanterns = [];
+  for (const x of [-2.4, 2.4]) {
+    const lantern = createLantern();
+    lantern.group.position.set(x, 0, -1.9);
+    scene.add(lantern.group);
+    lanterns.push(lantern);
   }
 
-  const bigTree = sakuraTree(1.15);
-  bigTree.position.set(-3.6, 0, -3.2);
-  scene.add(bigTree);
-  const smallTree = sakuraTree(0.85);
-  smallTree.position.set(3.9, 0, -4.4);
-  scene.add(smallTree);
+  // Sakura Trees (Left & Right)
+  const trees = [];
+  const bigTree = createSakuraTree(1.2);
+  bigTree.tree.position.set(-3.8, 0, -3.4);
+  scene.add(bigTree.tree);
+  trees.push(bigTree);
 
-  for (const [x, z, r] of [[-1.6, 0.6, 0.35], [1.7, 0.4, 0.3], [-2.8, -1.0, 0.42], [2.9, -2.4, 0.4], [1.0, -3.6, 0.3]]) {
-    const bush = part(new THREE.IcosahedronGeometry(r, 1), 0x6fb35a);
+  const smallTree = createSakuraTree(0.92);
+  smallTree.tree.position.set(4.1, 0, -4.5);
+  scene.add(smallTree.tree);
+  trees.push(smallTree);
+
+  // Bushes
+  for (const [x, z, r] of [
+    [-1.7, 0.7, 0.38],
+    [1.8, 0.5, 0.34],
+    [-2.9, -1.1, 0.44],
+    [3.1, -2.5, 0.42],
+    [1.1, -3.8, 0.32],
+  ]) {
+    const bush = part(new THREE.IcosahedronGeometry(r, 1), 0x6db558);
     bush.position.set(x, r * 0.7, z);
     scene.add(bush);
   }
 
-  scene.add(mountain());
-
-  const FLOWER_COLORS = [0xffffff, 0xff9ec7, 0xffd1dc, 0xc9a7ff];
-  for (const [x, z] of [[-1.3, 1.6], [-1.05, 1.9], [-1.55, 2.0], [-2.6, 1.2], [-2.35, 1.5], [1.25, 1.7], [1.5, 2.05], [1.05, 2.15],
-    [2.6, 0.9], [2.85, 1.25], [-0.75, 2.8], [0.9, 2.9], [-3.4, 2.4], [3.3, 2.2]]) {
-    const f = flower(FLOWER_COLORS[Math.abs(Math.round(x * 7 + z * 3)) % FLOWER_COLORS.length]);
+  // Wildflowers & Grass
+  const FLOWER_COLORS = [0xffffff, 0xffa3cb, 0xffd2dd, 0xd0b4ff];
+  const flowers = [];
+  for (const [x, z] of [
+    [-1.3, 1.6],
+    [-1.05, 1.9],
+    [-1.55, 2.0],
+    [-2.6, 1.2],
+    [-2.35, 1.5],
+    [1.25, 1.7],
+    [1.5, 2.05],
+    [1.05, 2.15],
+    [2.6, 0.9],
+    [2.85, 1.25],
+    [-0.75, 2.8],
+    [0.9, 2.9],
+    [-3.4, 2.4],
+    [3.3, 2.2],
+  ]) {
+    const f = createFlower(FLOWER_COLORS[Math.abs(Math.round(x * 7 + z * 3)) % FLOWER_COLORS.length]);
     f.position.set(x, 0, z);
     f.rotation.y = x * 3 + z;
     scene.add(f);
+    flowers.push(f);
   }
-  for (const [x, z] of [[-0.9, 1.2], [0.85, 1.1], [-2.0, 2.4], [2.1, 2.5], [-1.9, 0.2], [2.4, -0.3], [0.2, 3.2], [-3.0, 3.0], [3.1, 3.1]]) {
-    const tuft = grassTuft();
+
+  for (const [x, z] of [
+    [-0.9, 1.2],
+    [0.85, 1.1],
+    [-2.0, 2.4],
+    [2.1, 2.5],
+    [-1.9, 0.2],
+    [2.4, -0.3],
+    [0.2, 3.2],
+    [-3.0, 3.0],
+    [3.1, 3.1],
+  ]) {
+    const tuft = createGrassTuft();
     tuft.position.set(x, 0, z);
     tuft.rotation.y = x + z;
     scene.add(tuft);
   }
 
-  // Falling sakura petals.
+  // Floating Spirit Fireflies (Kitsunebi)
+  const { group: firefliesGroup, fireflies } = createSpiritFireflies();
+  scene.add(firefliesGroup);
+
+  // Falling Sakura Petals
   const petals = new THREE.InstancedMesh(
-    new THREE.PlaneGeometry(0.11, 0.075),
+    new THREE.PlaneGeometry(0.12, 0.08),
     new THREE.MeshBasicMaterial({ color: 0xffb7c5, side: THREE.DoubleSide }),
     PETALS,
   );
@@ -207,34 +420,74 @@ export function createGarden(scene) {
   const phase = new Float32Array(PETALS);
   const dummy = new THREE.Object3D();
 
-  function reset(i, anywhere) {
+  function resetPetal(i, anywhere) {
     pos[i * 3] = (Math.random() * 2 - 1) * AREA.x;
     pos[i * 3 + 1] = anywhere ? Math.random() * AREA.yTop : AREA.yTop + Math.random();
     pos[i * 3 + 2] = AREA.zMin + Math.random() * (AREA.zMax - AREA.zMin);
     vel[i * 3] = 0;
-    vel[i * 3 + 1] = -(0.35 + Math.random() * 0.4);
+    vel[i * 3 + 1] = -(0.32 + Math.random() * 0.42);
     vel[i * 3 + 2] = 0;
   }
+
   for (let i = 0; i < PETALS; i++) {
-    reset(i, true);
-    spin[i * 3] = Math.random() * 3;
-    spin[i * 3 + 1] = Math.random() * 3;
-    spin[i * 3 + 2] = Math.random() * 3;
+    resetPetal(i, true);
+    spin[i * 3] = Math.random() * 3.5;
+    spin[i * 3 + 1] = Math.random() * 3.5;
+    spin[i * 3 + 2] = Math.random() * 3.5;
     phase[i] = Math.random() * Math.PI * 2;
   }
   scene.add(petals);
 
+  // Update loop
   function update(t, dt) {
+    // 1. Drifting anime clouds
+    for (const c of clouds) {
+      c.obj.position.x -= c.speed * dt;
+      if (c.obj.position.x < -24) {
+        c.obj.position.x = 24;
+      }
+    }
+
+    // 2. Sakura tree branches gentle sway in the wind
+    for (const { canopyGroup } of trees) {
+      canopyGroup.rotation.z = Math.sin(t * 1.5) * 0.035;
+      canopyGroup.rotation.x = Math.cos(t * 1.2) * 0.025;
+    }
+
+    // 3. Torii gate shide paper tassels sway
+    for (let i = 0; i < shideTassels.length; i++) {
+      shideTassels[i].rotation.z = Math.sin(t * 2.2 + i * 0.6) * 0.08;
+    }
+
+    // 4. Lantern flicker
+    for (const { glow } of lanterns) {
+      glow.intensity = 1.3 + Math.sin(t * 8) * 0.2 + Math.cos(t * 14) * 0.1;
+    }
+
+    // 5. Spirit Fireflies float along 3D Lissajous paths
+    for (const ff of fireflies) {
+      ff.mesh.position.x = ff.baseX + Math.sin(t * ff.speed + ff.phase) * 0.8;
+      ff.mesh.position.y = ff.baseY + Math.cos(t * ff.speed * 1.3 + ff.phase) * 0.45;
+      ff.mesh.position.z = ff.baseZ + Math.sin(t * ff.speed * 0.7 + ff.phase) * 0.8;
+      ff.light.intensity = 0.6 + Math.sin(t * 4 + ff.phase) * 0.3;
+    }
+
+    // 6. Falling sakura petals aerodynamics
     const drag = Math.exp(-1.5 * dt);
     for (let i = 0; i < PETALS; i++) {
       const k = i * 3;
       vel[k] *= drag;
       vel[k + 2] *= drag;
-      vel[k + 1] = Math.max(vel[k + 1] - 1.2 * dt, -(0.35 + (i % 5) * 0.08));
-      pos[k] += (vel[k] + Math.sin(t * 0.8 + phase[i]) * 0.35 + 0.15) * dt;
+      vel[k + 1] = Math.max(vel[k + 1] - 1.2 * dt, -(0.32 + (i % 6) * 0.07));
+
+      pos[k] += (vel[k] + Math.sin(t * 0.9 + phase[i]) * 0.36 + 0.16) * dt;
       pos[k + 1] += vel[k + 1] * dt;
       pos[k + 2] += vel[k + 2] * dt;
-      if (pos[k + 1] < 0.02 || Math.abs(pos[k]) > AREA.x + 2) reset(i, false);
+
+      if (pos[k + 1] < 0.02 || Math.abs(pos[k]) > AREA.x + 2) {
+        resetPetal(i, false);
+      }
+
       dummy.position.set(pos[k], pos[k + 1], pos[k + 2]);
       dummy.rotation.set(t * spin[k], t * spin[k + 1], t * spin[k + 2]);
       dummy.updateMatrix();
@@ -243,19 +496,19 @@ export function createGarden(scene) {
     petals.instanceMatrix.needsUpdate = true;
   }
 
-  // Throws a handful of petals up around the mascot.
+  // Celebratory Sakura & Star Burst
   function burst() {
     for (let n = 0; n < BURST; n++) {
       const i = Math.floor(Math.random() * PETALS);
       const k = i * 3;
       const angle = Math.random() * Math.PI * 2;
-      const speed = 1.5 + Math.random() * 2;
+      const speed = 1.8 + Math.random() * 2.6;
       pos[k] = 0;
-      pos[k + 1] = 2.2;
-      pos[k + 2] = 0.3;
+      pos[k + 1] = 2.0;
+      pos[k + 2] = 0.4;
       vel[k] = Math.cos(angle) * speed;
-      vel[k + 1] = 1.5 + Math.random() * 1.5;
-      vel[k + 2] = Math.sin(angle) * speed * 0.6;
+      vel[k + 1] = 1.8 + Math.random() * 2.0;
+      vel[k + 2] = Math.sin(angle) * speed * 0.7;
     }
   }
 

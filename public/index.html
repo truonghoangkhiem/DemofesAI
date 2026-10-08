@@ -1,12 +1,12 @@
 <!doctype html>
-<html lang="en">
+<html lang="vi">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Prompt Sensei</title>
+  <title>Prompt Sensei (プロンプト先生) — 3D Anime AI Workshop Demo</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@500;800&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@500;700;800&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%A6%8A%3C/text%3E%3C/svg%3E">
   <link rel="stylesheet" href="styles.css">
   <script type="importmap">
@@ -20,86 +20,224 @@
   </script>
 </head>
 <body>
-  <canvas id="scene" aria-hidden="true"></canvas>
+  <canvas id="scene" aria-label="3D Japanese Anime Scene" tabindex="0"></canvas>
 
-  <header class="brand">
-    <span class="brand-mark" aria-hidden="true">先</span>
-    <div>
-      <h1>Prompt Sensei</h1>
-      <p>Your prompt-writing coach</p>
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-mark" aria-hidden="true">先</div>
+      <div class="brand-text">
+        <div class="brand-title-wrap">
+          <h1 class="brand-title">Prompt Sensei</h1>
+          <span class="brand-jp">プロンプト先生</span>
+          <span class="workshop-badge">AI FESTA DEMO 🌸</span>
+        </div>
+        <p class="brand-sub" id="brand-sub">Trợ lý Tối ưu Prompt AI · Phong cách Anime 3D</p>
+      </div>
+    </div>
+
+    <div class="topbar-actions">
+      <button id="cinema-btn" class="ctrl-btn" type="button" title="Chuyển chế độ xem 3D">
+        <span class="ctrl-icon">🌸</span>
+        <span class="ctrl-text" id="cinema-btn-text">Toàn cảnh 3D</span>
+      </button>
+      <button id="sound-btn" class="ctrl-btn" type="button" title="Bật/Tắt âm thanh hiệu ứng anime">
+        <span class="ctrl-icon">🔊</span>
+        <span class="ctrl-text" id="sound-btn-text">Âm thanh</span>
+      </button>
+      <button id="guide-btn" class="ctrl-btn" type="button" title="Xem hướng dẫn demo">
+        <span class="ctrl-icon">📖</span>
+        <span class="ctrl-text" id="guide-btn-text">Workshop</span>
+      </button>
+      <button id="lang-btn" class="ctrl-btn lang-pill" type="button" title="Đổi ngôn ngữ / Switch language">
+        <span class="ctrl-text">🇻🇳 VI</span>
+      </button>
     </div>
   </header>
 
-  <main class="panel" id="panel">
-    <p class="status sr-only" id="status" role="status"><span class="spinner" aria-hidden="true"></span><span id="status-text"></span><span id="status-seconds" class="status-seconds" aria-hidden="true"></span></p>
+  <!-- Interactive tip for 3D Mascot -->
+  <div class="mascot-tip" id="mascot-tip" role="status">
+    <span class="mascot-tip-icon">✨</span>
+    <span id="mascot-tip-text">Nhấp vào Sensei để tương tác &amp; nhận lời chúc!</span>
+  </div>
 
+  <main class="panel" id="panel">
+    <p class="status sr-only" id="status" role="status">
+      <span class="spinner" aria-hidden="true"></span>
+      <span id="status-text"></span>
+      <span id="status-seconds" class="status-seconds" aria-hidden="true"></span>
+    </p>
+
+    <!-- 1. INPUT VIEW -->
     <section data-view="input">
-      <h2>Write your prompt</h2>
-      <p class="hint">Sensei scores it with the 3C rule (Concise · Clear · Consistent) and the Role · Task · Context · Format framework.</p>
-      <label for="prompt-input" class="sr-only">Your prompt</label>
-      <textarea id="prompt-input" maxlength="4000" rows="9" placeholder="e.g. Write a blog post about AI"></textarea>
+      <div class="section-head">
+        <h2 id="input-title">Viết Prompt của bạn</h2>
+        <span class="tag-anime">Sensei 3C &amp; RTFC</span>
+      </div>
+      <p class="hint" id="input-hint">Sensei sẽ chấm điểm theo quy tắc 3C (Rõ ràng · Ngắn gọn · Nhất quán) và khung Role · Task · Context · Format.</p>
+
+      <!-- Workshop Quick Demo Presets -->
+      <div class="presets-box">
+        <div class="presets-header">
+          <span class="presets-icon">⚡</span>
+          <span class="presets-title" id="presets-label">Prompt mẫu thử nhanh cho Workshop:</span>
+        </div>
+        <div class="presets-grid">
+          <button type="button" class="preset-pill" data-preset="blog">
+            <span class="pill-badge red">Sơ sài</span>
+            <span>📝 Viết blog về AI</span>
+          </button>
+          <button type="button" class="preset-pill" data-preset="email">
+            <span class="pill-badge gold">Thiếu ý</span>
+            <span>📧 Email xin nghỉ phép</span>
+          </button>
+          <button type="button" class="preset-pill" data-preset="marketing">
+            <span class="pill-badge green">Chi tiết</span>
+            <span>🎯 Kế hoạch Marketing Gen Z</span>
+          </button>
+          <button type="button" class="preset-pill" data-preset="coding">
+            <span class="pill-badge blue">Kỹ thuật</span>
+            <span>💻 Viết hàm Python tối ưu</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="textarea-wrapper">
+        <label for="prompt-input" class="sr-only">Your prompt</label>
+        <textarea id="prompt-input" maxlength="4000" rows="8" placeholder="Ví dụ: Đóng vai chuyên gia dinh dưỡng, hãy lập thực đơn giảm cân khoa học 7 ngày cho nhân viên văn phòng..."></textarea>
+      </div>
+
       <div class="row">
         <span id="char-count" class="muted">0 / 4000</span>
-        <button id="evaluate-btn" class="btn primary" type="button">Evaluate <kbd>Ctrl+Enter</kbd></button>
+        <button id="evaluate-btn" class="btn primary anime-glow" type="button">
+          <span id="evaluate-btn-text">Đánh giá ngay</span>
+          <kbd>Ctrl+Enter</kbd>
+        </button>
       </div>
     </section>
 
+    <!-- 2. CLARIFY VIEW -->
     <section data-view="clarify" hidden>
-      <h2>Sensei has a few questions</h2>
+      <div class="section-head">
+        <h2 id="clarify-title">Sensei cần hỏi rõ thêm một chút</h2>
+        <span class="tag-anime clarify">Thắc mắc ❓</span>
+      </div>
       <p id="clarify-reason" class="bubble"></p>
       <form id="clarify-form">
         <ol id="clarify-list"></ol>
         <div class="row">
-          <button type="button" id="skip-btn" class="btn ghost">Skip &amp; score anyway</button>
-          <button type="submit" class="btn primary">Submit answers</button>
+          <button type="button" id="skip-btn" class="btn ghost">Bỏ qua &amp; Chấm điểm luôn</button>
+          <button type="submit" class="btn primary" id="clarify-submit-btn">Gửi câu trả lời</button>
         </div>
       </form>
     </section>
 
+    <!-- 3. RESULT VIEW -->
     <section data-view="result" hidden>
       <div class="score-head">
         <div class="hanko" id="overall-score" role="img" aria-label="Overall score">0</div>
-        <div>
-          <h2 id="score-title" tabindex="-1">Score</h2>
+        <div class="score-meta">
+          <h2 id="score-title" tabindex="-1">Điểm số</h2>
           <p id="score-subtitle" class="muted"></p>
         </div>
       </div>
-      <h3>Rubric</h3>
+
+      <div class="result-divider"></div>
+
+      <h3 id="rubric-heading">Chi tiết 9 tiêu chí đánh giá</h3>
       <ul id="criteria-list" class="criteria"></ul>
-      <h3>What you did well</h3>
-      <ul id="strengths-list" class="bullets"></ul>
-      <h3>Sensei's tips</h3>
-      <ul id="tips-list" class="bullets"></ul>
-      <h3>Improved prompt</h3>
-      <pre id="improved-prompt" class="prompt-box"></pre>
-      <div class="row wrap">
-        <button id="copy-btn" class="btn ghost" type="button">Copy</button>
-        <button id="use-btn" class="btn ghost" type="button">Use this</button>
-        <button id="try-btn" class="btn primary" type="button">Try it</button>
+
+      <div class="feedback-card good">
+        <h3 id="strengths-heading">🌸 Điểm bạn làm rất tốt</h3>
+        <ul id="strengths-list" class="bullets"></ul>
       </div>
-      <button class="btn link restart" type="button">Start over</button>
+
+      <div class="feedback-card tips">
+        <h3 id="tips-heading">✨ Lời khuyên vàng từ Sensei</h3>
+        <ul id="tips-list" class="bullets"></ul>
+      </div>
+
+      <div class="improved-card">
+        <div class="improved-header">
+          <h3 id="improved-heading">📜 Prompt đã được tối ưu hóa</h3>
+          <span class="badge-enhanced">Sensei Enhanced ✨</span>
+        </div>
+        <pre id="improved-prompt" class="prompt-box"></pre>
+      </div>
+
+      <div class="row wrap actions-row">
+        <button id="copy-btn" class="btn ghost" type="button">📋 Sao chép</button>
+        <button id="use-btn" class="btn ghost" type="button">✨ Dùng prompt này</button>
+        <button id="try-btn" class="btn primary anime-glow" type="button">⚔️ Chạy thử so sánh</button>
+      </div>
+      <button class="btn link restart" type="button" id="restart-btn-1">↩ Bắt đầu lại với prompt khác</button>
     </section>
 
+    <!-- 4. COMPARE VIEW -->
     <section data-view="compare" hidden>
-      <h2 id="compare-title" tabindex="-1">Same AI, two prompts</h2>
+      <div class="section-head">
+        <h2 id="compare-title" tabindex="-1">Cùng một AI, hai kết quả khác biệt!</h2>
+        <span class="tag-anime battle">So sánh đối chứng ⚔️</span>
+      </div>
+
       <div class="compare">
-        <article class="column">
-          <h3>Original prompt</h3>
-          <details><summary>Show prompt</summary><pre id="compare-original-prompt" class="prompt-box"></pre></details>
+        <article class="column original-col">
+          <div class="column-header">
+            <h3>Prompt ban đầu</h3>
+            <span class="badge-col">Chưa tối ưu</span>
+          </div>
+          <details><summary id="summary-original">Xem prompt gốc</summary><pre id="compare-original-prompt" class="prompt-box"></pre></details>
           <div id="compare-original" class="answer"></div>
         </article>
-        <article class="column improved">
-          <h3>Improved prompt</h3>
-          <details><summary>Show prompt</summary><pre id="compare-improved-prompt" class="prompt-box"></pre></details>
+
+        <article class="column improved improved-col">
+          <div class="column-header">
+            <h3>Prompt đã được Sensei tối ưu</h3>
+            <span class="badge-col enhanced">Tối ưu 3C 🌸</span>
+          </div>
+          <details><summary id="summary-improved">Xem prompt cải tiến</summary><pre id="compare-improved-prompt" class="prompt-box"></pre></details>
           <div id="compare-improved" class="answer"></div>
         </article>
       </div>
+
       <div class="row">
-        <button id="back-btn" class="btn ghost" type="button">Back to result</button>
-        <button class="btn link restart" type="button">Start over</button>
+        <button id="back-btn" class="btn ghost" type="button">⬅ Quay lại kết quả</button>
+        <button class="btn link restart" type="button" id="restart-btn-2">↩ Bắt đầu lại</button>
       </div>
     </section>
   </main>
+
+  <!-- Workshop Guide Modal -->
+  <div id="guide-modal" class="modal-backdrop" hidden>
+    <div class="modal-card">
+      <div class="modal-head">
+        <h2>🌸 Hướng dẫn Trình diễn Workshop</h2>
+        <button type="button" id="guide-close" class="modal-close-btn" aria-label="Đóng">✕</button>
+      </div>
+      <div class="modal-body">
+        <p class="guide-intro">Chào mừng bạn đến với buổi demo <strong>AI Festa</strong>! Dưới đây là 4 bước để trình diễn ấn tượng nhất cho khán giả:</p>
+        <ol class="guide-steps">
+          <li>
+            <strong>1. Chọn prompt sơ sài:</strong> Bấm chọn <em>"📝 Viết blog về AI"</em> hoặc <em>"📧 Email xin nghỉ phép"</em>.
+          </li>
+          <li>
+            <strong>2. Trải nghiệm hỏi làm rõ (Clarification):</strong> Sensei trong 3D sẽ nghiêng đầu suy nghĩ và đưa ra các câu hỏi gợi mở để người viết bổ sung ngữ cảnh.
+          </li>
+          <li>
+            <strong>3. Chấm điểm 3C &amp; Đóng dấu Hanko:</strong> Xem điểm số, bảng 9 tiêu chí và bản prompt viết lại chất lượng cao.
+          </li>
+          <li>
+            <strong>4. Chạy thử song song (Battle A/B):</strong> Bấm <em>"⚔️ Chạy thử so sánh"</em> để khán giả tận mắt chứng kiến output vượt trội của Gemini khi prompt được trau chuốt!
+          </li>
+        </ol>
+        <div class="guide-tip-box">
+          💡 <strong>Mẹo trình chiếu:</strong> Bấm nút <strong>"🌸 Toàn cảnh 3D"</strong> ở thanh trên để thu gọn bảng điều khiển và tương tác với chú Cáo Kitsune 3D phong cách hoạt hình Nhật Bản!
+        </div>
+      </div>
+      <div class="modal-foot">
+        <button type="button" id="guide-ok" class="btn primary">Đã hiểu, bắt đầu demo!</button>
+      </div>
+    </div>
+  </div>
 
   <div id="toast" class="toast" role="alert" hidden>
     <span id="toast-text"></span>

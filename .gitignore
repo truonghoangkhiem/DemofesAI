@@ -1,2 +1,26 @@
+# Dependencies
 node_modules/
+
+# Secrets — never commit API keys
 .env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Logs and runtime files
+*.log
+npm-debug.log*
+logs/
+
+# Editor / OS / tool files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+.claude/
+
+# Test / scratch output
+coverage/
+screenshots/
+tmp/
