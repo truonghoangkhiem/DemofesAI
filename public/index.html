@@ -6,19 +6,45 @@
   <title>Prompt Sensei (プロンプト先生) — 3D Anime AI Workshop Demo</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;600;700;800&family=Be+Vietnam+Pro:wght@400;500;600;700;800&family=Bungee&display=swap" rel="stylesheet">
+  <!-- Fonts load without blocking the first paint or the scripts (they use display=swap anyway). -->
+  <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;600;700;800&family=Be+Vietnam+Pro:wght@400;500;600;700;800&family=Bungee&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+  <noscript><link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;600;700;800&family=Be+Vietnam+Pro:wght@400;500;600;700;800&family=Bungee&display=swap" rel="stylesheet"></noscript>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%A6%8A%3C/text%3E%3C/svg%3E">
   <link rel="stylesheet" href="styles.css">
   <script type="importmap">
     {
       "imports": {
-        "three": "https://cdn.jsdelivr.net/npm/three@0.186.1/build/three.module.js",
-        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.186.1/examples/jsm/",
-        "marked": "https://cdn.jsdelivr.net/npm/marked@18.1.0/lib/marked.esm.js",
-        "dompurify": "https://cdn.jsdelivr.net/npm/dompurify@3.4.16/dist/purify.es.mjs"
+        "three": "/vendor/three/build/three.module.js",
+        "three/addons/": "/vendor/three/addons/",
+        "marked": "/vendor/marked/marked.esm.js",
+        "dompurify": "/vendor/dompurify/purify.es.mjs"
       }
     }
   </script>
+  <!-- Fetch the whole module graph in parallel up front instead of discovering it import by import. -->
+  <link rel="modulepreload" href="/vendor/marked/marked.esm.js">
+  <link rel="modulepreload" href="/vendor/dompurify/purify.es.mjs">
+  <link rel="modulepreload" href="app.js">
+  <link rel="modulepreload" href="audio.js">
+  <link rel="modulepreload" href="scene/index.js">
+  <link rel="modulepreload" href="scene/sky.js">
+  <link rel="modulepreload" href="scene/garden.js">
+  <link rel="modulepreload" href="scene/mascot.js">
+  <link rel="modulepreload" href="scene/effects.js">
+  <link rel="modulepreload" href="scene/toon.js">
+  <link rel="modulepreload" href="/vendor/three/build/three.module.js">
+  <link rel="modulepreload" href="/vendor/three/build/three.core.js">
+  <link rel="modulepreload" href="/vendor/three/addons/geometries/DecalGeometry.js">
+  <link rel="modulepreload" href="/vendor/three/addons/postprocessing/EffectComposer.js">
+  <link rel="modulepreload" href="/vendor/three/addons/postprocessing/RenderPass.js">
+  <link rel="modulepreload" href="/vendor/three/addons/postprocessing/UnrealBloomPass.js">
+  <link rel="modulepreload" href="/vendor/three/addons/postprocessing/ShaderPass.js">
+  <link rel="modulepreload" href="/vendor/three/addons/postprocessing/OutputPass.js">
+  <link rel="modulepreload" href="/vendor/three/addons/postprocessing/Pass.js">
+  <link rel="modulepreload" href="/vendor/three/addons/postprocessing/MaskPass.js">
+  <link rel="modulepreload" href="/vendor/three/addons/shaders/CopyShader.js">
+  <link rel="modulepreload" href="/vendor/three/addons/shaders/LuminosityHighPassShader.js">
+  <link rel="modulepreload" href="/vendor/three/addons/shaders/OutputShader.js">
 </head>
 <body>
   <canvas id="scene" aria-label="3D Japanese Anime Scene" tabindex="0"></canvas>

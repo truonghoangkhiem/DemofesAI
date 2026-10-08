@@ -4,14 +4,19 @@
   "private": true,
   "description": "Workshop demo: Gemini scores and improves your prompt, with a 3D kitsune sensei.",
   "type": "module",
-  "engines": { "node": ">=20" },
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "start": "node server.js",
     "test": "node --test"
   },
   "dependencies": {
     "@google/genai": "^2.28.0",
+    "dompurify": "3.4.16",
     "dotenv": "^18.0.6",
-    "express": "^5.2.1"
+    "express": "^5.2.1",
+    "marked": "18.1.0",
+    "three": "0.186.1"
   }
 }

@@ -36,7 +36,8 @@ function addRim(material, strength) {
         #include <opaque_fragment>`,
       );
   };
-  material.customProgramCacheKey = () => `rim-toon-${strength}`;
+  // The strength is a uniform, so every rim material can share one program.
+  material.customProgramCacheKey = () => 'rim-toon';
 }
 
 export function toon(color, { rim = 1, ...extra } = {}) {

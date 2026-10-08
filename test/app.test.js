@@ -265,3 +265,23 @@ test('other body-parser client errors keep their status as JSON', async () => {
   }
   assert.equal(logged.length, 0);
 });
+
+test('serves the vendored browser modules the importmap points at', async () => {
+  await withServer(fakeGemini().gemini, async base => {
+    const page = await (await fetch(base + '/')).text();
+    for (const path of [
+      '/vendor/three/build/three.module.js',
+      '/vendor/three/build/three.core.js',
+      '/vendor/three/addons/postprocessing/EffectComposer.js',
+      '/vendor/marked/marked.esm.js',
+      '/vendor/dompurify/purify.es.mjs',
+    ]) {
+      const res = await fetch(base + path);
+      assert.equal(res.status, 200, path);
+      assert.match(res.headers.get('content-type'), /javascript/, path);
+      await res.arrayBuffer();
+    }
+    assert.match(page, /"three": "\/vendor\/three\/build\/three\.module\.js"/);
+    assert.doesNotMatch(page, /cdn\.jsdelivr\.net/);
+  });
+});

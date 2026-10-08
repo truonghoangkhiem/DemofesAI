@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { FullScreenQuad } from 'three/addons/postprocessing/Pass.js';
 import { createSky, SUN_DIR } from './sky.js';
 import { createGarden } from './garden.js';
 import { createMascot } from './mascot.js';
@@ -19,6 +20,125 @@ const MOOD_RIM = {
 };
 
 const easeInOutCubic = x => (x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2);
+const timeout = ms => new Promise(resolve => setTimeout(resolve, ms, 'timeout'));
+
+// Hands the main thread back so the loading screen keeps animating between setup steps.
+// rAF never fires in a background tab, so a timer backs it up.
+function yieldToBrowser() {
+  return new Promise(resolve => {
+    const fallback = setTimeout(resolve, 100);
+    requestAnimationFrame(() => {
+      clearTimeout(fallback);
+      setTimeout(resolve, 0);
+    });
+  });
+}
+
+function materialsOf(object) {
+  if (!object.material) return [];
+  return Array.isArray(object.material) ? object.material : [object.material];
+}
+
+function texturesOf(material) {
+  const found = Object.values(material).filter(v => v?.isTexture);
+  for (const uniform of Object.values(material.uniforms ?? {})) if (uniform?.value?.isTexture) found.push(uniform.value);
+  return found.filter(t => !t.isRenderTargetTexture);
+}
+
+function passMaterials(pass) {
+  const found = [];
+  for (const value of Object.values(pass)) {
+    if (value?.isMaterial) found.push(value);
+    else if (Array.isArray(value)) found.push(...value.filter(v => v?.isMaterial));
+  }
+  return found;
+}
+
+// Uploads textures and compiles + links every shader the first frame needs, a little at a time.
+// Without KHR_parallel_shader_compile each program link blocks the main thread (seconds in total on
+// slow or software GPUs), so it happens about one program per task instead of all in the first frame.
+// Scene materials are compiled against an offscreen target because the composer renders the scene
+// into one; compiling for the canvas would build different (tone-mapped) variants and waste the work.
+async function warmUp(renderer, scene, camera, effects) {
+  const parallel = renderer.extensions.has('KHR_parallel_shader_compile');
+  const offscreen = effects.composer.renderTarget1;
+  // Post-processing materials compile on the same full-screen geometry the passes draw with.
+  const quadScene = new THREE.Scene();
+  const quad = new FullScreenQuad()._mesh;
+
+  const textures = new Set();
+  const jobs = [];
+  scene.traverseVisible(object => {
+    const materials = materialsOf(object);
+    if (!materials.length) return;
+    materials.forEach(m => texturesOf(m).forEach(t => textures.add(t)));
+    jobs.push(() => renderer.compile(object, camera, scene));
+  });
+  // The key light's shadow pass draws casters with a packed-depth material, back faces only.
+  let caster;
+  scene.traverseVisible(object => { if (!caster && object.isMesh && !object.isInstancedMesh && object.castShadow) caster = object; });
+  if (caster && renderer.shadowMap.enabled) {
+    const depth = new THREE.Mesh(caster.geometry, new THREE.MeshDepthMaterial({ side: THREE.BackSide }));
+    jobs.push(() => {
+      // Shadow passes see the lights but no fog.
+      const fog = scene.fog;
+      scene.fog = null;
+      try {
+        return renderer.compile(depth, camera, scene);
+      } finally {
+        scene.fog = fog;
+      }
+    });
+  }
+  const passes = effects.composer.passes;
+  const output = passes[passes.length - 1]; // draws to the canvas; handled below
+  for (const pass of passes) {
+    if (pass === output) continue;
+    for (const material of passMaterials(pass)) {
+      jobs.push(() => {
+        quad.material = material;
+        return renderer.compile(quad, camera, quadScene);
+      });
+    }
+  }
+
+  let lastYield = performance.now();
+  const maybeYield = async () => {
+    if (performance.now() - lastYield < 30) return;
+    await yieldToBrowser();
+    lastYield = performance.now();
+  };
+
+  for (const texture of textures) {
+    renderer.initTexture(texture);
+    await maybeYield();
+  }
+
+  const pending = new Set();
+  for (const job of jobs) {
+    renderer.setRenderTarget(offscreen);
+    const compiled = job();
+    renderer.setRenderTarget(null);
+    for (const material of compiled) {
+      const program = renderer.properties.get(material).currentProgram;
+      if (!program) continue;
+      if (parallel) pending.add(program);
+      else program.getUniforms(); // forces the link now, while we can still yield
+    }
+    await maybeYield();
+  }
+
+  // The output pass picks its defines (tone mapping, sRGB) on its first render; one cheap draw does it.
+  output.renderToScreen = true;
+  output.render(renderer, null, offscreen);
+  await yieldToBrowser();
+
+  // With the parallel extension, wait without blocking until the driver reports the links done.
+  while (pending.size) {
+    for (const program of pending) if (program.isReady()) pending.delete(program);
+    if (pending.size) await timeout(16);
+  }
+}
 
 // Resolves once the first frame is actually on screen, so the loader can cover shader compilation.
 export async function initScene(canvas, panelEl = document.getElementById('panel')) {
@@ -57,11 +177,15 @@ export async function initScene(canvas, panelEl = document.getElementById('panel
   rim.position.copy(SUN_DIR).multiplyScalar(20).setY(5);
   scene.add(rim);
 
+  // Build in steps so the loading screen never freezes while the world is assembled.
   const sky = createSky(scene);
+  await yieldToBrowser();
   const garden = createGarden(scene);
+  await yieldToBrowser();
   const mascot = createMascot();
   mascot.group.position.y = DAIS_TOP;
   scene.add(mascot.group);
+  await yieldToBrowser();
 
   const effects = createEffects(renderer, scene, camera);
 
@@ -229,9 +353,9 @@ export async function initScene(canvas, panelEl = document.getElementById('panel
   // Compile every shader up front (in parallel where the driver allows) instead of
   // stalling on the first frames while the page sits empty. Never wait forever on a driver.
   const compileStart = performance.now();
-  const timeout = ms => new Promise(resolve => setTimeout(resolve, ms, 'timeout'));
-  const compiled = await Promise.race([renderer.compileAsync(scene, camera), timeout(6000)]).catch(err => err);
-  console.info(`[scene] shaders ${compiled === 'timeout' ? 'still compiling after' : 'compiled in'} ${Math.round(performance.now() - compileStart)} ms`);
+  const compiled = await Promise.race([warmUp(renderer, scene, camera, effects), timeout(20000)]).catch(err => err);
+  if (compiled instanceof Error) console.warn('[scene] shader warm-up failed:', compiled);
+  console.info(`[scene] shaders ${compiled === 'timeout' ? 'still compiling after' : 'compiled in'} ${Math.round(performance.now() - compileStart)} ms (${renderer.info.programs.length} programs)`);
 
   let firstFrame;
   const firstFrameDone = new Promise(resolve => { firstFrame = resolve; });

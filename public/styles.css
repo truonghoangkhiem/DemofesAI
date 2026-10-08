@@ -117,7 +117,9 @@ body.no-webgl .mascot-tip { display: none; }
     radial-gradient(ellipse at 50% 120%, #ff9a8a 0%, transparent 55%),
     linear-gradient(to bottom, #1d1648, #5b3a9a 60%, #c46a9a);
   transition: opacity 0.8s ease, visibility 0.8s;
-  animation: loaderFallback 0s 12s forwards;
+  /* Safety net only: app.js always adds .scene-ready (also on failure). Hiding the loader early
+     would leave a static, half-loaded page that looks frozen. */
+  animation: loaderFallback 0s 30s forwards;
 }
 body.scene-ready .loader { opacity: 0; visibility: hidden; }
 @keyframes loaderFallback { to { opacity: 0; visibility: hidden; } }
@@ -1307,5 +1309,7 @@ details summary:hover { color: var(--gold); }
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
-  .loader { animation: loaderFallback 0s 3s forwards !important; }
+  .loader { animation: loaderFallback 0s 30s forwards !important; }
+  /* Keep the progress bar moving (slowly) so the page never looks stuck while loading. */
+  .loader-bar span { animation: loaderSlide 2.2s ease-in-out infinite !important; }
 }
