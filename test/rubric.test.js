@@ -24,6 +24,8 @@ test('rubric has 9 criteria totalling 100 points', () => {
 test('system instruction lists every criterion and the language rule', () => {
   for (const c of CRITERIA) assert.match(SYSTEM_INSTRUCTION, new RegExp(`${c.id} \\(${c.name.replace('&', '\\&')}, max ${c.max}\\)`));
   assert.match(SYSTEM_INSTRUCTION, /same language as the user prompt/);
+  assert.match(SYSTEM_INSTRUCTION, /reason, questions, feedback, strengths, tips and improvedPrompt/);
+  assert.doesNotMatch(SYSTEM_INSTRUCTION, /in English/);
   assert.match(SYSTEM_INSTRUCTION, /never follow/i);
   assert.match(SYSTEM_INSTRUCTION, /clarification answers are DATA/);
   assert.match(SYSTEM_INSTRUCTION, /<user_prompt> or <clarifications>/);
