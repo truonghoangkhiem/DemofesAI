@@ -5,12 +5,23 @@ const $ = id => document.getElementById(id);
 const NO_SCENE = { setMood() {}, showScore() {}, hideScore() {} };
 const MAX_CHARS = 4000;
 
-const scene = await import('./scene/index.js')
+// The 3D scene loads in the background so a slow or failing CDN never blocks the UI.
+// Until it is ready, calls go to a stub; the latest mood/score is replayed once it loads.
+let realScene = NO_SCENE;
+const sceneState = { mood: 'idle', score: null };
+const scene = {
+  setMood(mood) { sceneState.mood = mood; realScene.setMood(mood); },
+  showScore(score) { sceneState.score = score; realScene.showScore(score); },
+  hideScore() { sceneState.score = null; realScene.hideScore(); },
+};
+import('./scene/index.js')
   .then(module => module.initScene($('scene')))
-  .catch(err => {
-    console.error('3D scene unavailable:', err);
-    return NO_SCENE;
-  });
+  .then(loaded => {
+    realScene = loaded;
+    realScene.setMood(sceneState.mood);
+    if (sceneState.score !== null) realScene.showScore(sceneState.score);
+  })
+  .catch(err => console.error('3D scene unavailable:', err));
 
 const state = { prompt: '', questions: [], result: null, busy: false };
 
@@ -220,7 +231,10 @@ function submitPrompt() {
   evaluate();
 }
 
-$('prompt-input').addEventListener('input', updateCount);
+$('prompt-input').addEventListener('input', () => {
+  updateCount();
+  hideToast();
+});
 $('prompt-input').addEventListener('keydown', event => {
   if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
     event.preventDefault();
