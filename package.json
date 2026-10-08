@@ -1,0 +1,17 @@
+{
+  "name": "prompt-sensei",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Workshop demo: Gemini scores and improves your prompt, with a 3D kitsune sensei.",
+  "type": "module",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "@google/genai": "^2.28.0",
+    "dotenv": "^18.0.6",
+    "express": "^5.2.1"
+  }
+}
