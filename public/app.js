@@ -11,6 +11,7 @@ const NO_SCENE = {
   toggleCinema() {},
   pet() {},
   burst() {},
+  setLang() {},
 };
 const MAX_CHARS = 4000;
 
@@ -42,6 +43,8 @@ const I18N = {
     cinemaExit: 'Xem bảng UI',
     soundBtn: 'Âm thanh',
     soundMuted: 'Tắt tiếng',
+    musicBtn: 'Nhạc',
+    musicMuted: 'Tắt nhạc',
     guideBtn: 'Workshop',
     langPill: '🇻🇳 VI',
     mascotTip: 'Nhấp vào Sensei để tương tác & nhận lời chúc! 💖',
@@ -80,6 +83,8 @@ const I18N = {
     cinemaExit: 'Show UI',
     soundBtn: 'Sound',
     soundMuted: 'Muted',
+    musicBtn: 'Music',
+    musicMuted: 'No music',
     guideBtn: 'Workshop',
     langPill: '🇬🇧 EN',
     mascotTip: 'Click on Sensei to interact & get cheer! 💖',
@@ -124,6 +129,7 @@ const scene = {
   setMood(mood) {
     sceneState.mood = mood;
     realScene.setMood(mood);
+    audio.setMusicMood(mood);
   },
   showScore(score) {
     sceneState.score = score;
@@ -147,20 +153,33 @@ const scene = {
   burst() {
     realScene.burst();
   },
+  setLang(lang) {
+    realScene.setLang(lang);
+  },
 };
 
+const sceneLoadStart = performance.now();
 import('./scene/index.js')
-  .then(module => module.initScene($('scene'), $('panel')))
+  .then(module => {
+    console.info(`[scene] modules loaded in ${Math.round(performance.now() - sceneLoadStart)} ms`);
+    return module.initScene($('scene'), $('panel'));
+  })
   .then(loaded => {
     realScene = loaded;
+    realScene.setLang(currentLang);
     realScene.setMood(sceneState.mood);
     realScene.setView(sceneState.view);
     if (sceneState.score !== null) realScene.showScore(sceneState.score);
   })
-  .catch(err => console.error('3D scene unavailable:', err));
+  .catch(err => {
+    console.error('3D scene unavailable:', err);
+    document.body.classList.add('no-webgl');
+  })
+  .finally(() => document.body.classList.add('scene-ready'));
 
 const state = { prompt: '', questions: [], result: null, busy: false };
 
+const rankFor = score => (score >= 90 ? 'S' : score >= 80 ? 'A' : score >= 60 ? 'B' : 'C');
 const moodFor = score => (score >= 80 ? 'happy' : score >= 50 ? 'neutral' : 'sad');
 const titleFor = score => {
   const dict = I18N[currentLang];
@@ -174,7 +193,7 @@ function applyLanguage(lang) {
 
   $('brand-sub').textContent = dict.brandSub;
   $('cinema-btn-text').textContent = sceneState.cinema ? dict.cinemaExit : dict.cinemaBtn;
-  $('sound-btn-text').textContent = audio.isSoundEnabled() ? dict.soundBtn : dict.soundMuted;
+  syncAudioButtons();
   $('guide-btn-text').textContent = dict.guideBtn;
   $('lang-btn').querySelector('.ctrl-text').textContent = dict.langPill;
   $('mascot-tip-text').textContent = dict.mascotTip;
@@ -205,9 +224,25 @@ function applyLanguage(lang) {
   if (state.result) {
     $('score-title').textContent = titleFor(state.result.overall);
   }
+  scene.setLang(lang);
+}
+
+function syncAudioButtons() {
+  const dict = I18N[currentLang];
+  const sound = audio.isSoundEnabled();
+  const music = audio.isMusicEnabled();
+  $('sound-btn-text').textContent = sound ? dict.soundBtn : dict.soundMuted;
+  $('sound-btn').querySelector('.ctrl-icon').textContent = sound ? '🔊' : '🔇';
+  $('sound-btn').classList.toggle('active', sound);
+  $('sound-btn').classList.toggle('off', !sound);
+  $('music-btn-text').textContent = music ? dict.musicBtn : dict.musicMuted;
+  $('music-btn').classList.toggle('active', music);
+  $('music-btn').classList.toggle('off', !music);
 }
 
 function show(view) {
+  const current = document.querySelector('[data-view]:not([hidden])')?.dataset.view;
+  if (current && current !== view) audio.playWhoosh(view === 'compare' ? 1.3 : 1);
   for (const section of document.querySelectorAll('[data-view]')) {
     section.hidden = section.dataset.view !== view;
   }
@@ -245,7 +280,12 @@ function showToast(text, kind = 'error') {
   $('toast-text').textContent = text;
   $('toast').classList.toggle('success', kind === 'success');
   $('toast').hidden = false;
-  if (kind === 'success') toastTimer = setTimeout(hideToast, 2400);
+  if (kind === 'success') {
+    audio.playSuccess();
+    toastTimer = setTimeout(hideToast, 2400);
+  } else {
+    audio.playError();
+  }
 }
 function hideToast() {
   $('toast').hidden = true;
@@ -283,6 +323,7 @@ async function evaluate(clarifications) {
   scene.hideScore();
   scene.setMood('thinking');
   audio.playClack();
+  audio.playCast();
   setBusy(true, 'busyThinking');
 
   try {
@@ -321,17 +362,21 @@ function renderClarify(data) {
   );
   show('clarify');
   scene.setMood('confused');
+  audio.playQuestion();
   $('answer-0')?.focus();
 }
 
-function countUp(el, target) {
+function countUp(el, target, onDone) {
   const start = performance.now();
   const duration = 950;
   const step = now => {
     const t = Math.min(1, (now - start) / duration);
     // Smooth cubic ease-out
-    el.textContent = String(Math.round(target * (1 - Math.pow(1 - t, 3))));
+    const value = String(Math.round(target * (1 - Math.pow(1 - t, 3))));
+    if (value !== el.textContent) audio.playCount(target ? Number(value) / 100 : 0);
+    el.textContent = value;
     if (t < 1) requestAnimationFrame(step);
+    else onDone?.();
   };
   requestAnimationFrame(step);
 }
@@ -339,15 +384,26 @@ function countUp(el, target) {
 function renderResult(data) {
   state.result = data;
   const hanko = $('overall-score');
-  hanko.style.animation = 'none';
-  void hanko.offsetWidth; // restart stamp animation
-  hanko.style.animation = '';
-
-  countUp(hanko, data.overall);
-  audio.playStamp();
-  if (data.overall >= 80) {
-    setTimeout(audio.playChime, 400);
+  const crest = $('score-crest');
+  crest.dataset.rank = rankFor(data.overall);
+  $('rank-letter').textContent = rankFor(data.overall);
+  for (const el of [crest, hanko]) {
+    el.style.animation = 'none';
+    void el.offsetWidth; // restart pop-in animation
+    el.style.animation = '';
   }
+  const xp = $('xp-fill');
+  xp.style.width = '0';
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    xp.style.width = `${data.overall}%`;
+  }));
+  const flash = $('flash');
+  flash.classList.remove('on');
+  void flash.offsetWidth;
+  flash.classList.add('on');
+
+  audio.playStamp();
+  countUp(hanko, data.overall, () => audio.playFanfare(rankFor(data.overall)));
 
   hanko.setAttribute('aria-label', `Overall score: ${data.overall} out of 100`);
   $('score-title').textContent = titleFor(data.overall);
@@ -485,6 +541,7 @@ async function tryIt() {
         if (event.text) {
           side.text += event.text;
           side.status = 'streaming';
+          audio.playStream();
           frame ||= requestAnimationFrame(render);
         } else if (event.done) {
           side.status = 'done';
@@ -502,7 +559,12 @@ async function tryIt() {
     }
     const success = sides.improved.status === 'done';
     scene.setMood(success ? 'happy' : 'sad');
-    if (success) audio.playChime();
+    if (success) {
+      audio.playChime();
+      setTimeout(() => audio.playSparkle(6), 350);
+    } else {
+      audio.playError();
+    }
   } catch (err) {
     cancelAnimationFrame(frame);
     for (const side of Object.values(sides)) renderAnswer(side.el, { text: side.text, error: err.message });
@@ -553,9 +615,14 @@ for (const pill of document.querySelectorAll('.preset-pill')) {
 
 // Topbar controls
 $('sound-btn').addEventListener('click', () => {
-  const on = audio.toggleSound();
-  $('sound-btn-text').textContent = on ? I18N[currentLang].soundBtn : I18N[currentLang].soundMuted;
-  $('sound-btn').classList.toggle('active', on);
+  audio.toggleSound();
+  syncAudioButtons();
+});
+
+$('music-btn').addEventListener('click', () => {
+  audio.toggleMusic();
+  audio.playPop(audio.isMusicEnabled() ? 660 : 380);
+  syncAudioButtons();
 });
 
 $('cinema-btn').addEventListener('click', () => {
@@ -563,25 +630,46 @@ $('cinema-btn').addEventListener('click', () => {
   scene.toggleCinema(isCinema);
   $('cinema-btn-text').textContent = isCinema ? I18N[currentLang].cinemaExit : I18N[currentLang].cinemaBtn;
   $('cinema-btn').classList.toggle('active', isCinema);
-  audio.playPop(440);
+  audio.playCinema(isCinema);
 });
 
 $('guide-btn').addEventListener('click', () => {
   $('guide-modal').hidden = false;
-  audio.playPop(500);
+  audio.playOpen();
 });
-$('guide-close').addEventListener('click', () => {
-  $('guide-modal').hidden = true;
-});
-$('guide-ok').addEventListener('click', () => {
-  $('guide-modal').hidden = true;
-  audio.playPop(540);
-});
+for (const id of ['guide-close', 'guide-ok']) {
+  $(id).addEventListener('click', () => {
+    $('guide-modal').hidden = true;
+    audio.playClose();
+  });
+}
 
 $('lang-btn').addEventListener('click', () => {
   const nextLang = currentLang === 'vi' ? 'en' : 'vi';
   applyLanguage(nextLang);
   audio.playPop(600);
+  setTimeout(() => audio.playPop(800), 70);
+});
+
+// Audio can only start after a user gesture; keep trying until the browser allows it.
+const unlockAudio = () => {
+  audio.unlock();
+  if (audio.isUnlocked()) {
+    for (const type of ['pointerdown', 'pointerup', 'keydown']) window.removeEventListener(type, unlockAudio, true);
+  }
+};
+for (const type of ['pointerdown', 'pointerup', 'keydown']) window.addEventListener(type, unlockAudio, true);
+
+$('scene').addEventListener('pet', audio.playPet);
+
+// Soft tick when the mouse moves onto a button.
+document.addEventListener('pointerover', event => {
+  if (event.pointerType !== 'mouse') return;
+  const button = event.target.closest('button');
+  if (button && !button.disabled && !button.contains(event.relatedTarget)) audio.playHover();
+});
+document.addEventListener('input', event => {
+  if (event.target.matches('textarea')) audio.playType();
 });
 
 $('prompt-input').addEventListener('input', () => {
@@ -609,7 +697,6 @@ $('skip-btn').addEventListener('click', () => evaluate([]));
 $('copy-btn').addEventListener('click', async () => {
   try {
     await navigator.clipboard.writeText(state.result.improvedPrompt);
-    audio.playPop(640);
     showToast(I18N[currentLang].toastCopied, 'success');
   } catch {
     showToast(I18N[currentLang].toastCopyError);
