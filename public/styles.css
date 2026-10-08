@@ -177,6 +177,7 @@ body.scene-ready .loader { opacity: 0; visibility: hidden; }
   to { transform: translateX(250%); }
 }
 .loader-text { font: 400 12px var(--font-game); letter-spacing: 0.2em; color: var(--text-soft); }
+.loader-text.loader-error { max-width: 420px; text-align: center; letter-spacing: 0.02em; line-height: 1.5; font: 600 13px var(--font-body); color: #ffd2dc; }
 
 /* TOPBAR & BRAND */
 .topbar {

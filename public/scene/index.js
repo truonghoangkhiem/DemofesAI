@@ -9,6 +9,7 @@ import { rimUniforms } from './toon.js';
 const MOBILE_QUERY = '(max-width: 800px)';
 const DAIS_TOP = 0.34;
 const INTRO_SECONDS = 3.4;
+const INTRO_DELAY = 0.6; // seconds after the first frame, roughly the loader's fade-out
 
 const MOOD_RIM = {
   idle: [0xffc9a0, 0.55],
@@ -197,6 +198,9 @@ export async function initScene(canvas, panelEl = document.getElementById('panel
   const lookCurrent = new THREE.Vector3();
   const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   let introT = reducedMotion ? 1 : 0;
+  // The fly-in waits until the loader has faded and advances by at most one 30 fps step per frame,
+  // so start-up hitches cannot use up the animation while nobody can see it.
+  let introDelay = INTRO_DELAY;
   const introFrom = new THREE.Vector3(-9, 9, 24);
   const introLookFrom = new THREE.Vector3(0, 3, -12);
 
@@ -312,7 +316,8 @@ export async function initScene(canvas, panelEl = document.getElementById('panel
     camPos.set(cameraTargetPos.x + parallaxX, cameraTargetPos.y + parallaxY, cameraTargetPos.z);
     camLook.copy(lookTarget);
     if (introT < 1) {
-      introT = Math.min(1, introT + camDt / INTRO_SECONDS);
+      if (introDelay > 0) introDelay -= Math.min(camDt, 1 / 30);
+      else introT = Math.min(1, introT + Math.min(camDt, 1 / 30) / INTRO_SECONDS);
       const k = easeInOutCubic(introT);
       // Swing round in an arc rather than a straight dolly.
       const arc = Math.sin(k * Math.PI) * 2.5;

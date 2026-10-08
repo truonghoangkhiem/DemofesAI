@@ -297,6 +297,24 @@
     <button id="toast-close" type="button" aria-label="Dismiss">×</button>
   </div>
 
-  <script type="module" src="app.js"></script>
+  <script type="module" src="app.js" onerror="window.__loadFailed && window.__loadFailed()"></script>
+  <script>
+    // If the page code cannot load (e.g. the server runs older code without /vendor), say so instead of
+    // leaving the loader spinning forever; also hint after a long wait.
+    (function () {
+      var text = document.querySelector('.loader-text');
+      function show(message) {
+        if (document.body.classList.contains('scene-ready') || !text) return;
+        text.textContent = message;
+        text.classList.add('loader-error');
+      }
+      window.__loadFailed = function () {
+        show('Không tải được mã trang. Hãy chạy "npm install", khởi động lại server rồi bấm Ctrl+Shift+R.');
+      };
+      setTimeout(function () {
+        show('Tải lâu hơn bình thường… Nếu vẫn kẹt: khởi động lại server rồi bấm Ctrl+Shift+R (F12 → Console để xem lỗi).');
+      }, 15000);
+    })();
+  </script>
 </body>
 </html>
