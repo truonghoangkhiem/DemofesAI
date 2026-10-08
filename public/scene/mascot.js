@@ -1,25 +1,26 @@
-// Sensei: a chibi three-tailed kitsune with a painted anime face, foxfire, emote bubbles and a rank crest.
+// Sensei: a chibi Doraemon with painted eyes and face, a 4D pocket, emote bubbles and a rank crest.
 import * as THREE from 'three';
-import { DecalGeometry } from 'three/addons/geometries/DecalGeometry.js';
 import { part, toon, canvasTexture, getGlowTexture } from './toon.js';
 import { t, isLang, DEFAULT_LANG } from '../i18n.js';
 
-const ORANGE = 0xff9443;
-const CREAM = 0xfff4e6;
+const BLUE = 0x1ea0e8;
+const WHITE = 0xffffff;
+const RED = 0xe8282f;
+const GOLD = 0xffc61a;
 const DARK = 0x2a1a2e;
-const RED = 0xe8283f;
-const GOLD = 0xffc83b;
-const WOOD_DARK = 0x8a542b;
+const BLUE_CSS = '#1ea0e8';
+const INK = '#1c1420';
 // Rounded Japanese font after the Latin ones so kana and kanji do not fall back to a system font.
 const EMOTE_FONT = '"Baloo 2", "Be Vietnam Pro", "M PLUS Rounded 1c", sans-serif';
 
+// armL / armR raise each arm sideways; fwdL / fwdR swing it forward.
 const POSES = {
-  idle: { tilt: 0, pitch: 0, yaw: 0, ear: 0, armL: 0, armR: 0 },
-  thinking: { tilt: 0.14, pitch: -0.16, yaw: 0.12, ear: 0.05, armL: 0.2, armR: 0.6 },
-  confused: { tilt: 0.42, pitch: 0.05, yaw: -0.1, ear: 0.35, armL: -0.1, armR: 0.3 },
-  happy: { tilt: 0, pitch: -0.1, yaw: 0, ear: -0.22, armL: 2.3, armR: 2.3 },
-  neutral: { tilt: 0, pitch: 0, yaw: 0, ear: 0, armL: 0.1, armR: 0.1 },
-  sad: { tilt: -0.08, pitch: 0.24, yaw: 0, ear: 0.9, armL: -0.2, armR: -0.2 },
+  idle: { tilt: 0, pitch: 0, yaw: 0, armL: 0, armR: 0, fwdL: 0, fwdR: 0 },
+  thinking: { tilt: 0.12, pitch: -0.14, yaw: 0.1, armL: 0.1, armR: -0.75, fwdL: 0, fwdR: 2.05 },
+  confused: { tilt: 0.36, pitch: 0.04, yaw: -0.1, armL: 0.5, armR: 0.5, fwdL: 0.35, fwdR: 0.35 },
+  happy: { tilt: 0, pitch: -0.12, yaw: 0, armL: 2.25, armR: 2.25, fwdL: 0, fwdR: 0 },
+  neutral: { tilt: 0, pitch: 0, yaw: 0, armL: 0.15, armR: 0.15, fwdL: 0, fwdR: 0 },
+  sad: { tilt: -0.06, pitch: 0.2, yaw: 0, armL: -0.3, armR: -0.3, fwdL: 0.25, fwdR: 0.25 },
 };
 
 // Speech-bubble accent colour per mood; the text comes from the shared dictionary (public/i18n.js).
@@ -41,231 +42,253 @@ const RANKS = [
 ];
 export const rankFor = score => RANKS.find(r => score >= r.min);
 
-// ---------- Painted face (decal) ----------
-// Face texture covers head-space x ∈ [-0.5, 0.5], y ∈ [0.05, 0.85].
-const FACE_W = 512;
-const FACE_H = 410;
-const fx = x => (x + 0.5) * FACE_W;
-const fy = y => (1 - (y - 0.05) / 0.8) * FACE_H;
-const fs = s => s * FACE_W;
+// ---------- Geometry helpers ----------
+// Head-space (relative to the skull centre) measurements.
+const SKULL = new THREE.Vector3(0.636, 0.576, 0.6);
+const FACE_C = new THREE.Vector3(0, -0.03, 0.09);
+const FACE_R = new THREE.Vector3(0.6, 0.54, 0.53);
+const EYE_R = new THREE.Vector3(0.132, 0.182, 0.075);
+const EYE_X = 0.124;
+const EYE_Y = 0.29;
+
+// Flat front projection UVs, so a canvas painted "as seen from the front" lands where expected.
+function planarUV(geometry, minX, maxX, minY, maxY, u0 = 0, u1 = 1) {
+  const pos = geometry.attributes.position;
+  const uv = new Float32Array(pos.count * 2);
+  for (let i = 0; i < pos.count; i++) {
+    uv[i * 2] = u0 + ((pos.getX(i) - minX) / (maxX - minX)) * (u1 - u0);
+    uv[i * 2 + 1] = (pos.getY(i) - minY) / (maxY - minY);
+  }
+  geometry.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+  return geometry;
+}
+
+function ellipsoid(r, ws = 32, hs = 24) {
+  return new THREE.SphereGeometry(1, ws, hs).scale(r.x, r.y, r.z);
+}
+
+// Point on the skull surface (or the white face bulge, whichever is further out) plus its normal.
+function onHead(x, y) {
+  const z1 = SKULL.z * Math.sqrt(Math.max(0, 1 - (x / SKULL.x) ** 2 - (y / SKULL.y) ** 2));
+  const dy = (y - FACE_C.y) / FACE_R.y;
+  const z2 = FACE_C.z + FACE_R.z * Math.sqrt(Math.max(0, 1 - (x / FACE_R.x) ** 2 - dy ** 2));
+  const p = new THREE.Vector3(x, y, Math.max(z1, z2));
+  const n = z1 >= z2
+    ? new THREE.Vector3(x / SKULL.x ** 2, y / SKULL.y ** 2, p.z / SKULL.z ** 2).normalize()
+    : new THREE.Vector3(x / FACE_R.x ** 2, (y - FACE_C.y) / FACE_R.y ** 2, (p.z - FACE_C.z) / FACE_R.z ** 2).normalize();
+  return { p, n };
+}
+
+function softMaterial(texture, extra = {}) {
+  return toon(0xffffff, { map: texture, emissive: 0xffffff, emissiveMap: texture, emissiveIntensity: 0.22, ...extra });
+}
+
+// ---------- Painted eyes ----------
+// One canvas for both eyes: the left eye uses the left half, the right eye the right half.
+const EYE_W = 512;
+const EYE_H = 360;
 
 function drawEye(ctx, side, expr, gx, gy) {
-  const cx = fx(side * 0.205);
-  const cy = fy(0.53);
-  const w = fs(0.075);
-  const h = fs(0.1);
+  const ox = side < 0 ? 0 : EYE_W / 2;
+  const ex = xn => ox + (xn * 0.5 + 0.5) * (EYE_W / 2);
+  const ey = yn => (0.5 - yn * 0.5) * EYE_H;
+  const rx = EYE_W / 4;
+  const ry = EYE_H / 2;
+  const cx = ex(0);
+  const cy = ey(0);
   ctx.save();
-  ctx.lineCap = 'round';
-  ctx.lineJoin = 'round';
-  ctx.strokeStyle = '#2a1a2e';
-  ctx.fillStyle = '#2a1a2e';
-
-  if (expr === 'happy' || expr === 'pet') {
-    ctx.lineWidth = fs(0.026);
-    ctx.beginPath();
-    ctx.arc(cx, cy + h * 0.25, w * 0.95, Math.PI * 1.1, Math.PI * 1.9);
-    ctx.stroke();
-    ctx.restore();
-    return;
-  }
-  if (expr === 'blink') {
-    ctx.lineWidth = fs(0.022);
-    ctx.beginPath();
-    ctx.arc(cx, cy - h * 0.6, w * 1.05, Math.PI * 0.18, Math.PI * 0.82);
-    ctx.stroke();
-    ctx.restore();
-    return;
-  }
-
-  // Sclera + big glossy iris.
   ctx.fillStyle = '#ffffff';
+  ctx.fillRect(ox, 0, EYE_W / 2, EYE_H);
   ctx.beginPath();
-  ctx.ellipse(cx, cy, w, h, 0, 0, Math.PI * 2);
-  ctx.fill();
-  const small = expr === 'confused';
-  const ix = cx + gx * w * 0.28 + side * w * 0.04;
-  const iy = cy - gy * h * 0.22 + h * 0.06;
-  const iw = w * (small ? 0.6 : 0.86);
-  const ih = h * (small ? 0.64 : 0.9);
-  ctx.save();
-  ctx.beginPath();
-  ctx.ellipse(cx, cy, w, h, 0, 0, Math.PI * 2);
+  ctx.ellipse(cx, cy, rx * 0.93, ry * 0.93, 0, 0, Math.PI * 2);
   ctx.clip();
-  const iris = ctx.createLinearGradient(0, iy - ih, 0, iy + ih);
-  iris.addColorStop(0, '#3a1430');
-  iris.addColorStop(0.45, '#b4325a');
-  iris.addColorStop(1, '#ffb347');
-  ctx.fillStyle = iris;
-  ctx.beginPath();
-  ctx.ellipse(ix, iy, iw, ih, 0, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = '#1a0a18';
-  ctx.beginPath();
-  ctx.ellipse(ix, iy + ih * 0.05, iw * 0.45, ih * 0.5, 0, 0, Math.PI * 2);
-  ctx.fill();
-  // Catchlights.
-  ctx.fillStyle = '#ffffff';
-  ctx.beginPath();
-  ctx.ellipse(ix + iw * 0.32, iy - ih * 0.42, iw * 0.34, ih * 0.27, -0.4, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.beginPath();
-  ctx.arc(ix - iw * 0.35, iy + ih * 0.42, iw * 0.15, 0, Math.PI * 2);
-  ctx.fill();
-  if (expr === 'sad') {
-    ctx.globalAlpha = 0.85;
-    ctx.beginPath();
-    ctx.arc(ix + iw * 0.25, iy + ih * 0.2, iw * 0.12, 0, Math.PI * 2);
-    ctx.arc(ix - iw * 0.1, iy + ih * 0.55, iw * 0.08, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.globalAlpha = 1;
-  }
-  ctx.restore();
-
-  // Thick upper lash line with a flick at the outer corner.
-  ctx.lineWidth = fs(0.02);
-  ctx.beginPath();
-  ctx.ellipse(cx, cy, w * 1.02, h * 1.02, 0, Math.PI * 1.08, Math.PI * 1.92);
-  ctx.stroke();
-  ctx.beginPath();
-  ctx.moveTo(cx + side * w * 0.95, cy - h * 0.45);
-  ctx.lineTo(cx + side * w * 1.35, cy - h * 0.75);
-  ctx.stroke();
-  ctx.lineWidth = fs(0.008);
-  ctx.beginPath();
-  ctx.ellipse(cx, cy, w, h, 0, Math.PI * 0.2, Math.PI * 0.8);
-  ctx.stroke();
-
-  // Brows for sad / confused / thinking.
-  const by = cy - h * 1.55;
-  const slope = expr === 'sad' ? -0.35 : expr === 'confused' ? (side < 0 ? 0.3 : -0.15) : expr === 'thinking' ? 0.15 : 0;
-  if (slope) {
-    ctx.lineWidth = fs(0.014);
-    ctx.beginPath();
-    ctx.moveTo(cx - w * 0.8, by + side * slope * w);
-    ctx.lineTo(cx + w * 0.8, by - side * slope * w);
-    ctx.stroke();
-  }
-  ctx.restore();
-}
-
-function drawMouth(ctx, expr) {
-  const cx = fx(0);
-  const cy = fy(0.3);
-  const s = fs(0.04);
-  ctx.save();
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
-  ctx.strokeStyle = '#2a1a2e';
-  ctx.lineWidth = fs(0.012);
+  ctx.strokeStyle = INK;
+  ctx.fillStyle = INK;
+
   if (expr === 'happy' || expr === 'pet') {
-    ctx.fillStyle = '#7a1b33';
+    // Smiling closed eyes: "∩".
+    ctx.lineWidth = rx * 0.16;
     ctx.beginPath();
-    ctx.moveTo(cx - s * 1.3, cy - s * 0.2);
-    ctx.quadraticCurveTo(cx, cy - s * 0.5, cx + s * 1.3, cy - s * 0.2);
-    ctx.quadraticCurveTo(cx + s * 1.1, cy + s * 1.6, cx, cy + s * 1.6);
-    ctx.quadraticCurveTo(cx - s * 1.1, cy + s * 1.6, cx - s * 1.3, cy - s * 0.2);
-    ctx.fill();
+    ctx.ellipse(ex(0), ey(-0.28), rx * 0.42, ry * 0.42, 0, Math.PI * 1.05, Math.PI * 1.95);
     ctx.stroke();
-    ctx.fillStyle = '#ff7f9f';
+  } else if (expr === 'blink') {
+    // Relaxed closed eyes: "‿".
+    ctx.lineWidth = rx * 0.14;
     ctx.beginPath();
-    ctx.ellipse(cx, cy + s * 1.05, s * 0.7, s * 0.42, 0, 0, Math.PI * 2);
-    ctx.fill();
-  } else if (expr === 'thinking' || expr === 'confused') {
-    ctx.beginPath();
-    ctx.ellipse(cx + (expr === 'confused' ? s * 0.4 : 0), cy + s * 0.4, s * 0.42, s * 0.5, 0, 0, Math.PI * 2);
-    ctx.fillStyle = '#7a1b33';
-    ctx.fill();
-    ctx.stroke();
-  } else if (expr === 'sad') {
-    ctx.beginPath();
-    ctx.moveTo(cx - s * 0.9, cy + s * 0.7);
-    ctx.quadraticCurveTo(cx - s * 0.45, cy - s * 0.1, cx, cy + s * 0.45);
-    ctx.quadraticCurveTo(cx + s * 0.45, cy - s * 0.1, cx + s * 0.9, cy + s * 0.7);
+    ctx.ellipse(ex(0), ey(0.12), rx * 0.48, ry * 0.3, 0, Math.PI * 0.15, Math.PI * 0.85);
     ctx.stroke();
   } else {
-    // Cat mouth "ω".
+    const small = expr === 'confused';
+    const sad = expr === 'sad';
+    let px = small ? -side * 0.08 : sad ? -side * 0.18 : -side * 0.3 + gx * 0.36;
+    let py = small ? 0.02 : sad ? -0.32 : -0.08 + gy * 0.38;
+    const len = Math.hypot(px, py);
+    if (len > 0.58) { px *= 0.58 / len; py *= 0.58 / len; }
+    const pr = small ? 0.13 : 0.24;
     ctx.beginPath();
-    ctx.moveTo(cx - s * 1.0, cy);
-    ctx.quadraticCurveTo(cx - s * 0.5, cy + s * 0.8, cx, cy);
-    ctx.quadraticCurveTo(cx + s * 0.5, cy + s * 0.8, cx + s * 1.0, cy);
-    ctx.stroke();
+    ctx.ellipse(ex(px), ey(py), pr * rx, pr * 1.05 * ry * 0.72, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath();
+    ctx.arc(ex(px + pr * 0.35), ey(py + pr * 0.4), pr * rx * 0.32, 0, Math.PI * 2);
+    ctx.fill();
+    if (sad) {
+      // Heavy drooping lid: higher at the inner corner, lower at the outer corner.
+      ctx.fillStyle = BLUE_CSS;
+      ctx.beginPath();
+      ctx.moveTo(ex(-side * 1.1), ey(0.42));
+      ctx.lineTo(ex(side * 1.1), ey(0.02));
+      ctx.lineTo(ex(side * 1.1), ey(1.2));
+      ctx.lineTo(ex(-side * 1.1), ey(1.2));
+      ctx.closePath();
+      ctx.fill();
+      ctx.lineWidth = rx * 0.12;
+      ctx.beginPath();
+      ctx.moveTo(ex(-side * 1.1), ey(0.42));
+      ctx.lineTo(ex(side * 1.1), ey(0.02));
+      ctx.stroke();
+    }
   }
+  ctx.restore();
+  // Black rim around the white of the eye.
+  ctx.save();
+  ctx.strokeStyle = INK;
+  ctx.lineWidth = rx * 0.13;
+  ctx.beginPath();
+  ctx.ellipse(cx, cy, rx * 0.9, ry * 0.9, 0, 0, Math.PI * 2);
+  ctx.stroke();
   ctx.restore();
 }
 
-function drawFace(ctx, expr, gx, gy) {
-  ctx.clearRect(0, 0, FACE_W, FACE_H);
-  // Cream fox mask over the lower face and cheeks.
-  ctx.fillStyle = '#fff4e6';
-  ctx.beginPath();
-  ctx.moveTo(fx(-0.5), fy(0.47));
-  ctx.quadraticCurveTo(fx(-0.33), fy(0.43), fx(-0.17), fy(0.45));
-  ctx.quadraticCurveTo(fx(-0.05), fy(0.46), fx(0), fy(0.39));
-  ctx.quadraticCurveTo(fx(0.05), fy(0.46), fx(0.17), fy(0.45));
-  ctx.quadraticCurveTo(fx(0.33), fy(0.43), fx(0.5), fy(0.47));
-  ctx.lineTo(fx(0.5), fy(0.05));
-  ctx.lineTo(fx(-0.5), fy(0.05));
-  ctx.closePath();
-  ctx.fill();
+function drawEyes(ctx, expr, gx, gy) {
+  ctx.clearRect(0, 0, EYE_W, EYE_H);
+  drawEye(ctx, -1, expr, gx, gy);
+  drawEye(ctx, 1, expr, gx, gy);
+}
 
-  // Kitsune shrine markings: forehead flame + brow dots.
-  ctx.fillStyle = '#e8283f';
-  ctx.beginPath();
-  ctx.moveTo(fx(0), fy(0.84));
-  ctx.quadraticCurveTo(fx(0.07), fy(0.74), fx(0), fy(0.66));
-  ctx.quadraticCurveTo(fx(-0.07), fy(0.74), fx(0), fy(0.84));
-  ctx.fill();
-  for (const side of [-1, 1]) {
-    ctx.beginPath();
-    ctx.ellipse(fx(side * 0.2), fy(0.7), fs(0.035), fs(0.018), side * 0.3, 0, Math.PI * 2);
-    ctx.fill();
-  }
+// ---------- Painted face: nose line, mouth and whiskers ----------
+const FACE_W = 1024;
+const FACE_H = Math.round(FACE_W * FACE_R.y / FACE_R.x);
+const fx = x => (x / FACE_R.x * 0.5 + 0.5) * FACE_W;
+const fy = y => (0.5 - (y - FACE_C.y) / FACE_R.y * 0.5) * FACE_H;
+const fs = s => s / (2 * FACE_R.x) * FACE_W;
 
-  // Blush with anime hatch strokes.
+function drawFace(ctx, expr) {
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, FACE_W, FACE_H);
+  ctx.save();
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.strokeStyle = INK;
+  ctx.lineWidth = fs(0.016);
+
+  // Whiskers: three per side, fanning out.
   for (const side of [-1, 1]) {
-    const g = ctx.createRadialGradient(fx(side * 0.33), fy(0.4), 0, fx(side * 0.33), fy(0.4), fs(0.09));
-    g.addColorStop(0, `rgba(255, 110, 150, ${expr === 'pet' || expr === 'happy' ? 0.85 : 0.55})`);
-    g.addColorStop(1, 'rgba(255, 110, 150, 0)');
-    ctx.fillStyle = g;
-    ctx.beginPath();
-    ctx.ellipse(fx(side * 0.33), fy(0.4), fs(0.1), fs(0.06), 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = 'rgba(230, 70, 110, 0.7)';
-    ctx.lineWidth = fs(0.007);
-    for (let i = -1; i <= 1; i++) {
-      const x = fx(side * 0.33 + i * 0.03);
+    for (const [y0, y1] of [[0.04, 0.12], [-0.03, -0.03], [-0.1, -0.18]]) {
       ctx.beginPath();
-      ctx.moveTo(x + fs(0.012), fy(0.42));
-      ctx.lineTo(x - fs(0.012), fy(0.38));
+      ctx.moveTo(fx(side * 0.15), fy(y0));
+      ctx.lineTo(fx(side * 0.47), fy(y1));
       ctx.stroke();
     }
   }
 
-  drawEye(ctx, -1, expr, gx, gy);
-  drawEye(ctx, 1, expr, gx, gy);
-  drawMouth(ctx, expr);
-
-  if (expr === 'sad') {
-    // Single tear.
-    ctx.fillStyle = '#8fd8ff';
-    ctx.strokeStyle = '#2a1a2e';
-    ctx.lineWidth = fs(0.006);
-    const x = fx(0.27);
-    const y = fy(0.44);
+  const line = bottom => {
     ctx.beginPath();
-    ctx.moveTo(x, y - fs(0.035));
-    ctx.quadraticCurveTo(x + fs(0.025), y + fs(0.01), x, y + fs(0.02));
-    ctx.quadraticCurveTo(x - fs(0.025), y + fs(0.01), x, y - fs(0.035));
+    ctx.moveTo(fx(0), fy(0.06));
+    ctx.lineTo(fx(0), fy(bottom));
+    ctx.stroke();
+  };
+
+  if (expr === 'happy' || expr === 'pet') {
+    // Big open grin with a red tongue.
+    const mouth = () => {
+      ctx.beginPath();
+      ctx.moveTo(fx(-0.31), fy(-0.08));
+      ctx.quadraticCurveTo(fx(0), fy(-0.12), fx(0.31), fy(-0.08));
+      ctx.bezierCurveTo(fx(0.29), fy(-0.52), fx(-0.29), fy(-0.52), fx(-0.31), fy(-0.08));
+      ctx.closePath();
+    };
+    ctx.fillStyle = '#b3172b';
+    mouth();
+    ctx.fill();
+    ctx.save();
+    mouth();
+    ctx.clip();
+    ctx.fillStyle = '#ff6f61';
+    ctx.beginPath();
+    ctx.ellipse(fx(0), fy(-0.42), fs(0.17), fs(0.1), 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+    mouth();
+    ctx.stroke();
+    line(-0.1);
+  } else if (expr === 'thinking') {
+    line(-0.24);
+    ctx.beginPath();
+    ctx.moveTo(fx(-0.12), fy(-0.22));
+    ctx.quadraticCurveTo(fx(0), fy(-0.27), fx(0.12), fy(-0.22));
+    ctx.stroke();
+  } else if (expr === 'confused') {
+    line(-0.2);
+    ctx.beginPath();
+    for (let i = 0; i <= 24; i++) {
+      const x = -0.2 + (i / 24) * 0.4;
+      const y = -0.25 + Math.sin(i / 24 * Math.PI * 4) * 0.025;
+      if (i === 0) ctx.moveTo(fx(x), fy(y));
+      else ctx.lineTo(fx(x), fy(y));
+    }
+    ctx.stroke();
+  } else if (expr === 'sad') {
+    line(-0.22);
+    ctx.beginPath();
+    ctx.moveTo(fx(-0.25), fy(-0.34));
+    ctx.quadraticCurveTo(fx(0), fy(-0.1), fx(0.25), fy(-0.34));
+    ctx.stroke();
+    // A tear under the outer corner of the right eye.
+    ctx.fillStyle = '#8fd8ff';
+    ctx.lineWidth = fs(0.008);
+    const x = fx(0.25);
+    const y = fy(0.09);
+    ctx.beginPath();
+    ctx.moveTo(x, y - fs(0.045));
+    ctx.quadraticCurveTo(x + fs(0.035), y + fs(0.015), x, y + fs(0.028));
+    ctx.quadraticCurveTo(x - fs(0.035), y + fs(0.015), x, y - fs(0.045));
     ctx.fill();
     ctx.stroke();
+  } else {
+    // The classic wide smile; the nose line meets its lowest point.
+    line(-0.31);
+    ctx.beginPath();
+    ctx.moveTo(fx(-0.33), fy(-0.07));
+    ctx.quadraticCurveTo(fx(0), fy(-0.55), fx(0.33), fy(-0.07));
+    ctx.stroke();
   }
+  ctx.restore();
+}
+
+// ---------- 4D pocket on the belly ----------
+const BELLY_R = new THREE.Vector3(0.36, 0.36, 0.27);
+function drawBelly(ctx, w, h) {
+  const bx = x => (x / BELLY_R.x * 0.5 + 0.5) * w;
+  const by = y => (0.5 - y / BELLY_R.y * 0.5) * h;
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, w, h);
+  ctx.strokeStyle = INK;
+  ctx.lineWidth = w * 0.03;
+  ctx.lineCap = 'round';
+  ctx.beginPath();
+  ctx.moveTo(bx(-0.2), by(-0.02));
+  ctx.lineTo(bx(0.2), by(-0.02));
+  ctx.ellipse(bx(0), by(-0.02), bx(0.2) - bx(0), by(-0.2) - by(0), 0, 0, Math.PI);
+  ctx.stroke();
 }
 
 // ---------- Emote bubble ----------
 function createEmote() {
   const tex = canvasTexture(512, 256, () => {});
   const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: false, transparent: true, fog: false, toneMapped: false }));
-  sprite.renderOrder = 10;
   sprite.renderOrder = 10;
   sprite.scale.set(1.5, 0.75, 1);
   sprite.visible = false;
@@ -436,47 +459,53 @@ function createCrest() {
 }
 
 // ---------- Body parts ----------
-function createTail(spread) {
-  const root = new THREE.Group();
-  root.rotation.set(-0.75, 0, spread);
-  const segments = [];
-  const RADII = [0.13, 0.17, 0.2, 0.2, 0.17, 0.11];
-  let parent = root;
-  RADII.forEach((r, i) => {
-    const seg = new THREE.Group();
-    seg.position.y = i === 0 ? 0 : RADII[i - 1] * 1.05;
-    const tip = i >= RADII.length - 2;
-    const fluff = part(new THREE.SphereGeometry(r, 18, 14), tip ? CREAM : ORANGE, { outline: 0.06 });
-    fluff.scale.set(1, 1.45, 1);
-    fluff.position.y = r * 0.9;
-    seg.add(fluff);
-    parent.add(seg);
-    segments.push(seg);
-    parent = seg;
-  });
-  return { root, segments };
+function createBell() {
+  const bell = new THREE.Group();
+  const ball = part(new THREE.SphereGeometry(0.09, 20, 14), GOLD, { outline: 0.07, emissive: 0x5a3c00 });
+  // Raised band around the upper half.
+  const band = part(new THREE.TorusGeometry(0.088, 0.011, 8, 32), 0xe9a800, { outline: 0 });
+  band.rotation.x = Math.PI / 2;
+  band.position.y = 0.022;
+  // Round hole with a slit running down from it.
+  const dir = new THREE.Vector3(0, -0.42, 0.91).normalize();
+  const hole = new THREE.Mesh(new THREE.SphereGeometry(0.019, 10, 8), toon(DARK, { rim: 0 }));
+  hole.position.copy(dir).multiplyScalar(0.085);
+  hole.scale.set(1, 1, 0.5);
+  hole.lookAt(dir.clone().multiplyScalar(2));
+  const slit = new THREE.Mesh(new THREE.BoxGeometry(0.012, 0.05, 0.02), toon(DARK, { rim: 0 }));
+  const slitDir = new THREE.Vector3(0, -0.78, 0.63).normalize();
+  slit.position.copy(slitDir).multiplyScalar(0.084);
+  slit.rotation.x = Math.atan2(-slitDir.y, slitDir.z); // long side follows the surface downward
+  bell.add(ball, band, hole, slit);
+  return bell;
 }
 
-function faceDecal(skull) {
-  // Project onto a stand-in skull in head space so the decal can live inside the head group.
-  const proxy = new THREE.Mesh(skull.geometry);
-  proxy.position.copy(skull.position);
-  proxy.scale.copy(skull.scale);
-  proxy.updateMatrixWorld(true);
-  const geometry = new DecalGeometry(proxy, new THREE.Vector3(0, 0.45, 0.6), new THREE.Euler(0, 0, 0), new THREE.Vector3(1.0, 0.8, 1.2));
-  const texture = canvasTexture(FACE_W, FACE_H, () => {});
-  const material = toon(0xffffff, {
-    rim: 0,
-    map: texture,
-    transparent: true,
-    depthWrite: false,
-    polygonOffset: true,
-    polygonOffsetFactor: -4,
-    emissive: 0xffffff,
-    emissiveMap: texture,
-    emissiveIntensity: 0.22,
-  });
-  return { mesh: new THREE.Mesh(geometry, material), texture };
+function createTakecopter() {
+  const g = new THREE.Group();
+  const base = part(new THREE.SphereGeometry(0.06, 14, 10), GOLD, { outline: 0.08 });
+  base.scale.set(1, 0.45, 1);
+  const stick = part(new THREE.CylinderGeometry(0.017, 0.017, 0.13, 8), GOLD, { outline: 0.1 });
+  stick.position.y = 0.07;
+  const rotor = new THREE.Group();
+  rotor.position.y = 0.14;
+  const blade = part(new THREE.BoxGeometry(0.56, 0.018, 0.075), 0xffd84a, { outline: 0.05 });
+  const hub = part(new THREE.SphereGeometry(0.028, 10, 8), 0xffb21e, { outline: 0.1 });
+  rotor.add(blade, hub);
+  g.add(base, stick, rotor);
+  g.visible = false;
+  return { group: g, rotor };
+}
+
+function createSweat() {
+  const g = new THREE.Group();
+  const drop = part(new THREE.SphereGeometry(0.06, 16, 12), 0x9fe2ff, { outline: 0.08, emissive: 0x1a4a66 });
+  const tip = part(new THREE.ConeGeometry(0.052, 0.09, 16), 0x9fe2ff, { outline: 0.08, emissive: 0x1a4a66 });
+  tip.position.y = 0.065;
+  const shine = new THREE.Mesh(new THREE.SphereGeometry(0.014, 8, 6), new THREE.MeshBasicMaterial({ color: 0xffffff }));
+  shine.position.set(-0.02, 0.01, 0.05);
+  g.add(drop, tip, shine);
+  g.visible = false;
+  return g;
 }
 
 export function createMascot() {
@@ -484,131 +513,114 @@ export function createMascot() {
   const body = new THREE.Group();
   group.add(body);
 
-  const torso = part(new THREE.SphereGeometry(0.44, 32, 24), ORANGE);
-  torso.scale.set(1, 1.08, 0.92);
-  torso.position.y = 0.46;
-  const belly = part(new THREE.SphereGeometry(0.32, 24, 16), CREAM, { outline: 0 });
-  belly.scale.set(0.95, 1.15, 0.65);
-  belly.position.set(0, 0.44, 0.22);
+  // Body: blue ball, white belly with the 4D pocket painted on.
+  const torso = part(new THREE.SphereGeometry(0.45, 36, 26), BLUE);
+  torso.scale.set(1, 0.95, 0.92);
+  torso.position.y = 0.52;
+  const bellyTex = canvasTexture(512, 512, drawBelly);
+  const belly = part(planarUV(ellipsoid(BELLY_R), -BELLY_R.x, BELLY_R.x, -BELLY_R.y, BELLY_R.y), WHITE, {
+    outline: 0, map: bellyTex, emissive: 0xffffff, emissiveMap: bellyTex, emissiveIntensity: 0.15,
+  });
+  belly.position.set(0, 0.5, 0.17);
+  const POCKET = new THREE.Vector3(0, 0.4, 0.45);
+  body.add(torso, belly);
 
-  // Shrine-style scarf with a gold bell and a fluttering tail end.
-  const scarf = part(new THREE.TorusGeometry(0.32, 0.085, 12, 32), RED, { outline: 0.06 });
-  scarf.rotation.x = Math.PI / 2;
-  scarf.position.y = 0.82;
-  const scarfEnd = new THREE.Group();
-  scarfEnd.position.set(0.24, 0.8, -0.18);
-  const scarfTail = part(new THREE.BoxGeometry(0.14, 0.42, 0.04), RED, { outline: 0.08 });
-  scarfTail.geometry.translate(0, -0.21, 0);
-  scarfEnd.add(scarfTail);
-  const bell = part(new THREE.SphereGeometry(0.085, 16, 12), GOLD, { outline: 0.06, emissive: 0x6a4200 });
-  bell.position.set(0, 0.73, 0.38);
-  body.add(torso, belly, scarf, scarfEnd, bell);
+  // Red collar with the golden bell.
+  const collar = part(new THREE.TorusGeometry(0.305, 0.064, 14, 48), RED, { outline: 0.05 });
+  collar.rotation.x = Math.PI / 2;
+  collar.scale.set(1, 0.93, 1);
+  collar.position.y = 0.83;
+  const bell = createBell();
+  const bellPivot = new THREE.Group();
+  bellPivot.position.set(0, 0.82, 0.32);
+  bell.position.set(0, -0.07, 0.07);
+  bellPivot.add(bell);
+  body.add(collar, bellPivot);
 
-  for (const x of [-0.22, 0.22]) {
-    const foot = part(new THREE.SphereGeometry(0.14, 16, 12), ORANGE);
-    foot.scale.set(1, 0.65, 1.35);
-    foot.position.set(x, 0.07, 0.12);
-    const toe = part(new THREE.SphereGeometry(0.08, 12, 8), CREAM, { outline: 0 });
-    toe.scale.set(0.9, 0.5, 0.9);
-    toe.position.set(x, 0.06, 0.24);
-    body.add(foot, toe);
+  // Short legs and flat round white feet.
+  for (const x of [-0.19, 0.19]) {
+    const leg = part(new THREE.SphereGeometry(0.15, 16, 12), BLUE, { outline: 0.04 });
+    leg.position.set(x, 0.17, 0.0);
+    const foot = part(new THREE.SphereGeometry(0.16, 20, 14), WHITE, { outline: 0.06 });
+    foot.scale.set(1.12, 0.5, 1.3);
+    foot.position.set(x * 1.05, 0.075, 0.06);
+    body.add(leg, foot);
   }
 
+  // Red ball tail on a thin stem.
+  const tail = new THREE.Group();
+  tail.position.set(0, 0.3, -0.36);
+  const stem = part(new THREE.CylinderGeometry(0.014, 0.014, 0.12, 8), DARK, { outline: 0 });
+  stem.rotation.x = Math.PI / 2 + 0.4;
+  stem.position.set(0, -0.02, -0.05);
+  const tailBall = part(new THREE.SphereGeometry(0.07, 16, 12), RED, { outline: 0.07 });
+  tailBall.position.set(0, -0.05, -0.12);
+  tail.add(stem, tailBall);
+  body.add(tail);
+
+  // Arms: stubby blue arms ending in round white hands (no fingers).
   function arm(side) {
     const g = new THREE.Group();
-    g.position.set(0.38 * side, 0.64, 0.06);
-    const paw = part(new THREE.SphereGeometry(0.11, 16, 12), ORANGE);
-    paw.scale.set(0.85, 1.5, 0.85);
-    paw.position.set(0.06 * side, -0.12, 0.08);
-    const pawTip = part(new THREE.SphereGeometry(0.075, 12, 10), CREAM, { outline: 0.04 });
-    pawTip.position.set(0.07 * side, -0.26, 0.1);
-    g.add(paw, pawTip);
+    g.position.set(0.36 * side, 0.7, 0.02);
+    const hang = new THREE.Group();
+    hang.rotation.z = side * 0.5;
+    const limb = part(new THREE.CapsuleGeometry(0.095, 0.17, 6, 16), BLUE);
+    limb.position.y = -0.14;
+    const hand = part(new THREE.SphereGeometry(0.115, 18, 14), WHITE);
+    hand.position.y = -0.33;
+    hang.add(limb, hand);
+    g.add(hang);
     body.add(g);
     return g;
   }
   const leftArm = arm(-1);
   const rightArm = arm(1);
 
-  const brush = new THREE.Group();
-  brush.position.set(0.12, -0.2, 0.18);
-  brush.rotation.set(0.4, 0.2, -0.6);
-  const handle = part(new THREE.CylinderGeometry(0.02, 0.02, 0.55, 10), WOOD_DARK, { outline: 0.04 });
-  const ferrule = part(new THREE.CylinderGeometry(0.028, 0.028, 0.06, 10), GOLD, { outline: 0.04 });
-  ferrule.position.y = 0.26;
-  const tip = part(new THREE.ConeGeometry(0.045, 0.14, 12), DARK, { outline: 0.03 });
-  tip.position.y = 0.34;
-  const ink = new THREE.Mesh(new THREE.SphereGeometry(0.035, 10, 8), new THREE.MeshBasicMaterial({ color: new THREE.Color(0.6, 2.4, 3) }));
-  ink.position.y = 0.42;
-  brush.add(handle, ferrule, tip, ink);
-  rightArm.add(brush);
-
-  // Three fluffy tails fanned out behind.
-  const tails = [-0.62, 0, 0.62].map((spread, i) => {
-    const t = createTail(spread);
-    t.root.position.set(spread * 0.12, 0.28, -0.32);
-    t.phase = i * 1.3;
-    body.add(t.root);
-    return t;
-  });
-
-  // Head.
+  // Head: big blue ball, white face bulge, tall eyes, red nose, painted mouth and whiskers.
   const head = new THREE.Group();
-  head.position.y = 0.88;
+  head.position.y = 0.86;
   body.add(head);
-  const skull = part(new THREE.SphereGeometry(0.56, 40, 30), ORANGE);
-  skull.scale.set(1.15, 0.96, 1.05);
-  skull.position.y = 0.46;
-  head.add(skull);
+  const skullSpace = new THREE.Group();
+  skullSpace.position.y = 0.5;
+  head.add(skullSpace);
+  const skull = part(ellipsoid(SKULL, 96, 72), BLUE);
+  skullSpace.add(skull);
 
-  const face = faceDecal(skull);
-  head.add(face.mesh);
-  const nose = part(new THREE.SphereGeometry(0.042, 12, 8), DARK, { outline: 0 });
-  nose.scale.set(1.35, 0.85, 1);
-  nose.position.set(0, 0.365, 0.578);
-  const noseShine = new THREE.Mesh(new THREE.SphereGeometry(0.013, 8, 6), new THREE.MeshBasicMaterial({ color: 0xffffff }));
-  noseShine.position.set(0.012, 0.38, 0.612);
-  head.add(nose, noseShine);
+  const faceTex = canvasTexture(FACE_W, FACE_H, () => {});
+  const face = part(planarUV(ellipsoid(FACE_R, 96, 72), -FACE_R.x, FACE_R.x, -FACE_R.y, FACE_R.y), WHITE, {
+    outline: 0.025, map: faceTex, emissive: 0xffffff, emissiveMap: faceTex, emissiveIntensity: 0.18,
+  });
+  face.position.copy(FACE_C);
+  skullSpace.add(face);
 
-  // Cheek fluff tufts.
+  const eyeTex = canvasTexture(EYE_W, EYE_H, () => {});
+  const eyeMat = softMaterial(eyeTex, { emissiveIntensity: 0.3 });
   for (const side of [-1, 1]) {
-    for (const [y, len, ang] of [[0.36, 0.26, 0.55], [0.22, 0.2, 0.95]]) {
-      const tuft = part(new THREE.ConeGeometry(0.1, len, 10), CREAM, { outline: 0.06 });
-      tuft.position.set(side * 0.66, y, 0.06);
-      tuft.rotation.z = -side * (Math.PI / 2 + ang - 0.5);
-      head.add(tuft);
-    }
+    const geo = planarUV(ellipsoid(EYE_R, 32, 24), -EYE_R.x, EYE_R.x, -EYE_R.y, EYE_R.y, side < 0 ? 0 : 0.5, side < 0 ? 0.5 : 1);
+    const eye = new THREE.Mesh(geo, eyeMat);
+    const { p, n } = onHead(side * EYE_X, EYE_Y);
+    eye.position.copy(p).addScaledVector(n, 0.012);
+    // Lean the eye back with the head curve but keep it upright.
+    eye.rotation.set(-Math.asin(n.y) * 0.85, Math.atan2(n.x, n.z) * 0.8, 0);
+    eye.castShadow = true;
+    skullSpace.add(eye);
   }
 
-  // Big ears with dark tips and pink inner fur.
-  const ears = [];
-  for (const side of [-1, 1]) {
-    const earGroup = new THREE.Group();
-    earGroup.position.set(0.34 * side, 0.88, 0.02);
-    const outer = part(new THREE.ConeGeometry(0.23, 0.52, 16), ORANGE);
-    outer.position.y = 0.24;
-    const inner = part(new THREE.ConeGeometry(0.13, 0.34, 16), 0xffc6d2, { outline: 0 });
-    inner.position.set(0, 0.18, 0.1);
-    inner.scale.z = 0.5;
-    const tipMesh = part(new THREE.ConeGeometry(0.098, 0.2, 16), 0x3d2433, { outline: 0 });
-    tipMesh.position.y = 0.415;
-    earGroup.add(outer, inner, tipMesh);
-    head.add(earGroup);
-    ears.push({ earGroup, side, twitch: 0 });
-  }
+  const noseAt = onHead(0, 0.11);
+  const nose = part(new THREE.SphereGeometry(0.072, 20, 14), RED, { outline: 0.07, emissive: 0x4a0008 });
+  nose.position.copy(noseAt.p).addScaledVector(noseAt.n, 0.04);
+  const noseShine = new THREE.Mesh(new THREE.SphereGeometry(0.02, 10, 8), new THREE.MeshBasicMaterial({ color: 0xffffff }));
+  noseShine.position.copy(nose.position).add(new THREE.Vector3(-0.024, 0.03, 0.055));
+  skullSpace.add(nose, noseShine);
 
-  // Kitsunebi: three foxfire wisps orbiting Sensei.
-  const foxfire = [];
-  const fireMat = new THREE.SpriteMaterial({ map: getGlowTexture(), color: new THREE.Color(0.8, 2.2, 3.2), blending: THREE.AdditiveBlending, depthWrite: false, transparent: true });
-  for (let i = 0; i < 3; i++) {
-    const wisp = new THREE.Group();
-    const outer = new THREE.Sprite(fireMat);
-    outer.scale.setScalar(0.42);
-    const core = new THREE.Sprite(new THREE.SpriteMaterial({ map: getGlowTexture(), color: new THREE.Color(3, 3, 3), blending: THREE.AdditiveBlending, depthWrite: false, transparent: true }));
-    core.scale.setScalar(0.14);
-    wisp.add(outer, core);
-    group.add(wisp);
-    foxfire.push({ wisp, outer, phase: (i / 3) * Math.PI * 2 });
-  }
+  const copter = createTakecopter();
+  copter.group.position.set(0, SKULL.y - 0.015, 0);
+  skullSpace.add(copter.group);
+
+  const sweat = createSweat();
+  sweat.position.set(0.56, 0.36, 0.28);
+  sweat.rotation.z = -0.35;
+  skullSpace.add(sweat);
 
   // Invisible hitbox for clicks.
   const hitbox = new THREE.Mesh(new THREE.SphereGeometry(0.95, 12, 8), new THREE.MeshBasicMaterial());
@@ -622,7 +634,8 @@ export function createMascot() {
   group.add(emote.sprite);
 
   const crest = createCrest();
-  crest.group.position.set(-1.35, 2.15, 0);
+  const CREST_POS = new THREE.Vector3(-1.35, 2.15, 0);
+  crest.group.position.copy(CREST_POS);
   group.add(crest.group);
 
   // ---------- State ----------
@@ -634,13 +647,17 @@ export function createMascot() {
   let moodAge = 0;
   let crestAge = 0;
   let petBounce = 0;
-  let nextTwitch = 2;
   let nextBlink = 2.5;
   let blinkLeft = 0;
   let faceKey = '';
+  let eyeKey = '';
+  let copterScale = 0;
+  let sweatScale = 0;
+  let reach = 0;
   const pose = { ...POSES.idle };
   const pointerTarget = { x: 0, y: 0 };
   const pointerCurrent = { x: 0, y: 0 };
+  const crestFrom = new THREE.Vector3();
 
   function showEmote(key, seconds = 0) {
     if (!EMOTE_COLORS[key]) {
@@ -708,51 +725,48 @@ export function createMascot() {
     const sad = mood === 'sad';
     const happy = mood === 'happy';
     const thinking = mood === 'thinking';
+    const confused = mood === 'confused';
     const speed = sad ? 1.4 : happy ? 3.4 : 2.2;
 
     // Body: breathe, hop, squash & stretch.
-    const breathe = Math.sin(t * speed) * (sad ? 0.012 : 0.026);
+    const breathe = Math.sin(t * speed) * (sad ? 0.012 : 0.022);
     const petHop = Math.sin(petBounce * Math.PI) * 0.4;
     const happyHop = happy && moodAge < 3.5 ? Math.abs(Math.sin(moodAge * 6)) * 0.32 : 0;
     const hop = happyHop + petHop;
     body.position.y = breathe + hop;
-    const squash = hop > 0.01 ? 1 + hop * 0.25 : 1 + Math.sin(t * speed * 2) * 0.015;
+    const squash = hop > 0.01 ? 1 + hop * 0.2 : 1 + Math.sin(t * speed * 2) * 0.012;
     body.scale.set(1 / Math.sqrt(squash), squash, 1 / Math.sqrt(squash));
 
     const nod = mood === 'neutral' ? Math.sin(moodAge * 6) * 0.15 * Math.max(0, 1 - moodAge / 2) : 0;
     head.rotation.z = pose.tilt + (thinking ? Math.sin(t * 1.5) * 0.06 : 0);
-    head.rotation.x = pose.pitch + nod - pointerCurrent.y * 0.22;
-    head.rotation.y = pose.yaw + pointerCurrent.x * 0.45;
+    head.rotation.x = pose.pitch + nod - pointerCurrent.y * 0.2;
+    head.rotation.y = pose.yaw + pointerCurrent.x * 0.42;
 
-    bell.rotation.z = Math.sin(t * speed * 1.5) * 0.3;
-    scarfEnd.rotation.x = 0.5 + Math.sin(t * 3.1) * 0.15;
-    scarfEnd.rotation.z = Math.sin(t * 2.3) * 0.2;
+    bellPivot.rotation.z = Math.sin(t * speed * 1.5) * 0.25;
+    bellPivot.rotation.x = -0.15 + Math.sin(t * speed * 1.1) * 0.08 - hop * 0.6;
+    tail.rotation.y = Math.sin(t * (happy ? 9 : sad ? 1.5 : 3)) * (happy ? 0.5 : 0.2);
 
-    nextTwitch -= dt;
-    if (nextTwitch <= 0) {
-      ears[Math.random() < 0.5 ? 0 : 1].twitch = 0.5;
-      nextTwitch = 1.5 + Math.random() * 3.5;
-    }
-    for (const ear of ears) {
-      if (ear.twitch > 0) ear.twitch = Math.max(0, ear.twitch - dt * 4);
-      ear.earGroup.rotation.z = -ear.side * (0.3 + pose.ear) + Math.sin(ear.twitch * Math.PI * 4) * 0.2;
-    }
-
-    // Tails: wave down the chain like a whip.
-    const tailSpeed = happy ? 8 : sad ? 1.4 : thinking ? 4.5 : 2.6;
-    const tailAmp = happy ? 0.3 : sad ? 0.06 : 0.17;
-    for (const tail of tails) {
-      tail.root.rotation.x = -0.75 + (sad ? 0.45 : 0) + Math.sin(t * tailSpeed * 0.5 + tail.phase) * 0.06;
-      tail.segments.forEach((seg, i) => {
-        seg.rotation.z = Math.sin(t * tailSpeed - i * 0.55 + tail.phase) * tailAmp * (0.4 + i * 0.25);
-        seg.rotation.x = Math.cos(t * tailSpeed * 0.7 - i * 0.5 + tail.phase) * tailAmp * 0.5 - 0.06 * i;
-      });
-    }
-
+    // Pulling the score sign out of the 4D pocket: the left hand reaches up to it, then relaxes.
+    const pulling = crest.group.visible && crestAge < 2;
+    reach += ((pulling ? 1 : 0) - reach) * (1 - Math.exp(-dt * 8));
+    const armL = pose.armL + reach * (2.3 - pose.armL);
     // Positive pose values raise each arm outward.
-    leftArm.rotation.z = -pose.armL - Math.sin(t * speed) * 0.08 - (happy ? Math.sin(t * 9) * 0.25 : 0);
-    rightArm.rotation.z = pose.armR + Math.sin(t * speed) * 0.08 + (happy ? Math.sin(t * 9 + 1) * 0.25 : 0);
-    brush.rotation.x = thinking ? 0.8 + Math.sin(t * 4) * 0.25 : 0.4;
+    leftArm.rotation.z = -armL - Math.sin(t * speed) * 0.08 - (happy ? Math.sin(t * 9) * 0.25 : 0);
+    // A pat makes Doraemon wave back with his right hand.
+    const wave = Math.sin(petBounce * Math.PI) * (2 + Math.sin(t * 14) * 0.3);
+    rightArm.rotation.z = pose.armR + wave + Math.sin(t * speed) * 0.08 + (happy ? Math.sin(t * 9 + 1) * 0.25 : 0);
+    leftArm.rotation.x = -pose.fwdL * (1 - reach);
+    rightArm.rotation.x = -pose.fwdR + (thinking ? Math.sin(t * 4) * 0.06 : 0);
+
+    // Take-copter pops up when happy; sweat drop when confused.
+    copterScale += ((happy ? 1 : 0) - copterScale) * (1 - Math.exp(-dt * 6));
+    copter.group.visible = copterScale > 0.02;
+    copter.group.scale.setScalar(copterScale);
+    copter.rotor.rotation.y = t * 22;
+    sweatScale += ((confused ? 1 : 0) - sweatScale) * (1 - Math.exp(-dt * 7));
+    sweat.visible = sweatScale > 0.02;
+    sweat.scale.setScalar(sweatScale);
+    sweat.position.y = 0.36 - ((moodAge * 0.25) % 0.12);
 
     // Face: blink on a random timer, pupils follow the pointer.
     nextBlink -= dt;
@@ -761,24 +775,21 @@ export function createMascot() {
       nextBlink = 2 + Math.random() * 3.5;
     }
     blinkLeft = Math.max(0, blinkLeft - dt);
-    const expr = petBounce > 0.05 ? 'pet' : blinkLeft > 0 && mood !== 'happy' ? 'blink' : mood === 'idle' ? 'neutral' : mood;
+    const faceExpr = petBounce > 0.05 ? 'pet' : mood === 'idle' ? 'neutral' : mood;
+    const eyeExpr = faceExpr === 'pet' || faceExpr === 'happy' ? faceExpr : blinkLeft > 0 ? 'blink' : faceExpr;
     const gx = thinking ? 0.7 : Math.round(pointerCurrent.x * 4) / 4;
     const gy = thinking ? 0.8 : Math.round(pointerCurrent.y * 4) / 4;
-    const key = `${expr}|${gx}|${gy}`;
-    if (key !== faceKey) {
-      faceKey = key;
-      drawFace(face.texture.ctx, expr, gx, gy);
-      face.texture.needsUpdate = true;
+    const ek = `${eyeExpr}|${gx}|${gy}`;
+    if (ek !== eyeKey) {
+      eyeKey = ek;
+      drawEyes(eyeTex.ctx, eyeExpr, gx, gy);
+      eyeTex.needsUpdate = true;
     }
-
-    // Foxfire orbit; flares bright when thinking.
-    const orbitSpeed = thinking ? 2.6 : happy ? 1.8 : 0.8;
-    const glow = thinking ? 1.6 : sad ? 0.6 : 1;
-    foxfire.forEach(({ wisp, outer, phase }, i) => {
-      const a = t * orbitSpeed + phase;
-      wisp.position.set(Math.cos(a) * 1.05, 1.15 + Math.sin(t * 2 + i * 2) * 0.22, Math.sin(a) * 0.75);
-      outer.scale.setScalar((0.36 + Math.sin(t * 9 + i) * 0.05) * glow);
-    });
+    if (faceExpr !== faceKey) {
+      faceKey = faceExpr;
+      drawFace(faceTex.ctx, faceExpr);
+      faceTex.needsUpdate = true;
+    }
 
     // Emote: pop in, then bob.
     if (emote.sprite.visible) {
@@ -788,12 +799,18 @@ export function createMascot() {
       emote.sprite.position.y = 2.35 + Math.sin(t * 3.2) * 0.05;
     }
 
-    // Crest: elastic pop-in, spinning rays, gentle float.
+    // Crest: flies up out of the pocket, then an elastic pop, spinning rays and a gentle float.
     if (crest.group.visible) {
-      const k = Math.min(1, crestAge * 1.8);
+      const fly = Math.min(1, crestAge / 0.85);
+      const e = 1 - (1 - fly) ** 3;
+      crestFrom.copy(POCKET);
+      crestFrom.y += body.position.y;
+      crest.group.position.lerpVectors(crestFrom, CREST_POS, e);
+      crest.group.position.y += Math.sin(e * Math.PI) * 0.5 + Math.sin(t * 1.8) * 0.06 * e;
+      crest.group.position.z += Math.sin(e * Math.PI) * 0.7; // arc in front of the head, never behind it
+      const k = Math.min(1, Math.max(0, crestAge - 0.6) * 1.8);
       const elastic = k >= 1 ? 1 : 1 - Math.pow(2, -10 * k) * Math.cos(k * Math.PI * 4.5);
-      crest.group.scale.setScalar(elastic);
-      crest.group.position.y = 2.15 + Math.sin(t * 1.8) * 0.06;
+      crest.group.scale.setScalar(0.12 + (0.5 * e) + 0.38 * elastic);
       crest.rays.material.rotation = t * 0.5;
     }
   }
