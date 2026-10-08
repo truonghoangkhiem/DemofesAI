@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { FullScreenQuad } from 'three/addons/postprocessing/Pass.js';
 import { createSky, SUN_DIR } from './sky.js';
 import { createGarden } from './garden.js';
-import { createMascot } from './mascot.js';
+import { createMascot, DIG_END } from './mascot.js';
 import { createEffects } from './effects.js';
 import { rimUniforms } from './toon.js';
 
@@ -402,6 +402,7 @@ export async function initScene(canvas, panelEl = document.getElementById('panel
     canvas.dispatchEvent(new CustomEvent('pet'));
   }
 
+  let pullTimer = 0;
   return {
     setMood(mood) {
       mascot.setMood(mood);
@@ -416,9 +417,17 @@ export async function initScene(canvas, panelEl = document.getElementById('panel
     },
     showScore(score) {
       mascot.showScore(score);
-      effects.flash(0.35);
+      // The flash and sparkles land when the sign comes out of the 4D pocket, not while he rummages.
+      clearTimeout(pullTimer);
+      pullTimer = setTimeout(() => {
+        effects.flash(0.35);
+        garden.burst(0.6);
+      }, DIG_END * 1000);
     },
-    hideScore: mascot.hideScore,
+    hideScore() {
+      clearTimeout(pullTimer);
+      mascot.hideScore();
+    },
     setView(view) {
       currentView = view;
       updateCameraTargets();

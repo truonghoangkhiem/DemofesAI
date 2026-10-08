@@ -50,6 +50,8 @@ const FACE_R = new THREE.Vector3(0.6, 0.54, 0.53);
 const EYE_R = new THREE.Vector3(0.132, 0.182, 0.075);
 const EYE_X = 0.124;
 const EYE_Y = 0.29;
+// Seconds Doraemon rummages in the 4D pocket before the score sign comes out.
+export const DIG_END = 0.75;
 
 // Flat front projection UVs, so a canvas painted "as seen from the front" lands where expected.
 function planarUV(geometry, minX, maxX, minY, maxY, u0 = 0, u1 = 1) {
@@ -523,6 +525,9 @@ export function createMascot() {
   });
   belly.position.set(0, 0.49, 0.2);
   const POCKET = new THREE.Vector3(0, 0.4, 0.46);
+  // Left-arm pose that puts the hand in the pocket (tuned by eye from close-up renders).
+  const DIG_ARM = -0.8;
+  const DIG_FWD = 0.85;
   body.add(torso, belly);
 
   // Red collar with the golden bell.
@@ -577,6 +582,10 @@ export function createMascot() {
     return g;
   }
   const leftArm = arm(-1);
+  // His arms are too short to reach the pocket from the shoulder, so while digging the shoulder
+  // swings forward and in (like hunching over the pocket).
+  const leftShoulder = leftArm.position.clone();
+  const digShoulder = new THREE.Vector3(-0.27, 0.64, 0.24);
   const rightArm = arm(1);
 
   // Head: big blue ball, white face bulge, tall eyes, red nose, painted mouth and whiskers.
@@ -657,6 +666,7 @@ export function createMascot() {
   let copterScale = 0;
   let sweatScale = 0;
   let reach = 0;
+  let dig = 0;
   const pose = { ...POSES.idle };
   const pointerTarget = { x: 0, y: 0 };
   const pointerCurrent = { x: 0, y: 0 };
@@ -751,17 +761,26 @@ export function createMascot() {
     bellPivot.rotation.x = -0.15 + Math.sin(t * speed * 1.1) * 0.08 - hop * 0.6;
     tail.rotation.y = Math.sin(t * (happy ? 9 : sad ? 1.5 : 3)) * (happy ? 0.5 : 0.2);
 
-    // Pulling the score sign out of the 4D pocket: the left hand reaches up with it, then keeps
-    // presenting it (a little lower when sad) for as long as the sign is shown.
-    const reachTarget = !crest.group.visible ? 0 : crestAge < 2 ? 1 : sad ? 0.55 : 0.9;
+    // Score sign choreography: dig into the 4D pocket with the left hand (leaning in, looking down),
+    // pull the sign out, then keep presenting it (a little lower when sad) while it is shown.
+    const digging = crest.group.visible && crestAge < DIG_END;
+    dig += ((digging ? 1 : 0) - dig) * (1 - Math.exp(-dt * 12));
+    const reachTarget = !crest.group.visible || digging ? 0 : crestAge < DIG_END + 1.6 ? 1 : sad ? 0.55 : 0.9;
     reach += (reachTarget - reach) * (1 - Math.exp(-dt * 8));
-    const armL = pose.armL + reach * (1.75 - pose.armL);
+    let armL = pose.armL + reach * (1.75 - pose.armL);
+    armL += dig * (DIG_ARM - armL);
+    let fwdL = pose.fwdL + reach * (0.6 - pose.fwdL);
+    fwdL += dig * (DIG_FWD - fwdL);
     // Positive pose values raise each arm outward.
-    leftArm.rotation.z = -armL - Math.sin(t * speed) * 0.08 - (happy ? Math.sin(t * 9) * 0.25 : 0);
+    leftArm.rotation.z = -armL - Math.sin(t * speed) * 0.08 * (1 - dig) - (happy ? Math.sin(t * 9) * 0.25 * (1 - dig) : 0);
     // A pat makes Doraemon wave back with his right hand.
     const wave = Math.sin(petBounce * Math.PI) * (2 + Math.sin(t * 14) * 0.3);
     rightArm.rotation.z = pose.armR + wave + Math.sin(t * speed) * 0.08 + (happy ? Math.sin(t * 9 + 1) * 0.25 : 0);
-    leftArm.rotation.x = -(pose.fwdL + reach * (0.6 - pose.fwdL));
+    // Rummaging: the hand jiggles inside the pocket.
+    leftArm.rotation.x = -fwdL + dig * Math.sin(t * 24) * 0.09;
+    leftArm.position.lerpVectors(leftShoulder, digShoulder, dig);
+    body.rotation.x = dig * 0.12;
+    head.rotation.x += dig * 0.28;
     rightArm.rotation.x = -pose.fwdR + (thinking ? Math.sin(t * 4) * 0.06 : 0);
 
     // Take-copter pops up when happy; sweat drop when confused.
@@ -784,7 +803,7 @@ export function createMascot() {
     const faceExpr = petBounce > 0.05 ? 'pet' : mood === 'idle' ? 'neutral' : mood;
     const eyeExpr = faceExpr === 'pet' || faceExpr === 'happy' ? faceExpr : blinkLeft > 0 ? 'blink' : faceExpr;
     const gx = thinking ? 0.7 : Math.round(pointerCurrent.x * 4) / 4;
-    const gy = thinking ? 0.8 : Math.round(pointerCurrent.y * 4) / 4;
+    const gy = thinking ? 0.8 : dig > 0.5 ? -0.75 : Math.round(pointerCurrent.y * 4) / 4;
     const ek = `${eyeExpr}|${gx}|${gy}`;
     if (ek !== eyeKey) {
       eyeKey = ek;
@@ -805,9 +824,9 @@ export function createMascot() {
       emote.sprite.position.y = 2.35 + Math.sin(t * 3.2) * 0.05;
     }
 
-    // Crest: flies up out of the pocket, then an elastic pop, spinning rays and a gentle float.
+    // Crest: hidden in the pocket while he rummages, then flies up out of it, grows, and pops.
     if (crest.group.visible) {
-      const fly = Math.min(1, crestAge / 1.25);
+      const fly = Math.min(1, Math.max(0, crestAge - DIG_END) / 1.0);
       // Ease in-out: lingers at the pocket first so the pull reads, then glides up beside him.
       const e = fly < 0.5 ? 4 * fly ** 3 : 1 - (-2 * fly + 2) ** 3 / 2;
       crestFrom.copy(POCKET);
@@ -815,9 +834,9 @@ export function createMascot() {
       crest.group.position.lerpVectors(crestFrom, CREST_POS, e);
       crest.group.position.y += Math.sin(e * Math.PI) * 0.5 + Math.sin(t * 1.8) * 0.06 * e;
       crest.group.position.z += Math.sin(e * Math.PI) * 0.7; // arc in front of the head, never behind it
-      const k = Math.min(1, Math.max(0, crestAge - 1.0) * 1.8);
+      const k = Math.min(1, Math.max(0, crestAge - DIG_END - 0.8) * 1.8);
       const elastic = k >= 1 ? 1 : 1 - Math.pow(2, -10 * k) * Math.cos(k * Math.PI * 4.5);
-      crest.group.scale.setScalar(0.12 + (0.5 * e) + 0.38 * elastic);
+      crest.group.scale.setScalar(crestAge < DIG_END ? 0.001 : 0.08 + (0.54 * e) + 0.38 * elastic);
       crest.rays.material.rotation = t * 0.5;
     }
   }
