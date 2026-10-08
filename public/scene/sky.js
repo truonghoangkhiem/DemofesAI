@@ -80,20 +80,70 @@ function createRidge({ z, width, height, color, seed, peaks = 9, y = -2 }) {
   return mesh;
 }
 
+// Mount Fuji as a painted backdrop: wide concave flanks, a flat crater rim, and a snow cap whose
+// lower edge runs down the gullies in streaks. Flat silhouettes, like the ridges, so it reads as art.
+const FUJI = { halfWidth: 58, height: 24, rim: 3.2, curve: 1.75 };
+
+// Height of the flank at horizontal offset x (concave: steep near the top, gentle near the base).
+function fujiHeight(x) {
+  const u = Math.max(0, Math.abs(x) - FUJI.rim) / (FUJI.halfWidth - FUJI.rim);
+  return u >= 1 ? 0 : FUJI.height * Math.pow(1 - u, FUJI.curve);
+}
+
+function verticalGradient(geometry, bottomColor, topColor, top) {
+  const pos = geometry.attributes.position;
+  const colors = new Float32Array(pos.count * 3);
+  const a = new THREE.Color(bottomColor);
+  const b = new THREE.Color(topColor);
+  const c = new THREE.Color();
+  for (let i = 0; i < pos.count; i++) {
+    c.copy(a).lerp(b, THREE.MathUtils.clamp(pos.getY(i) / top, 0, 1));
+    colors.set([c.r, c.g, c.b], i * 3);
+  }
+  geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+  return geometry;
+}
+
 function createFuji() {
   const group = new THREE.Group();
-  const body = new THREE.Mesh(
-    new THREE.ConeGeometry(22, 13, 64, 1, true),
-    new THREE.MeshBasicMaterial({ color: 0x8a6fb4, fog: false }),
-  );
-  body.position.y = 4.5;
-  const cap = new THREE.Mesh(
-    new THREE.ConeGeometry(6.4, 3.8, 64),
-    new THREE.MeshBasicMaterial({ color: 0xffe3e6, fog: false }),
-  );
-  cap.position.y = 9.1;
-  group.add(body, cap);
-  group.position.set(14, -3.5, -70);
+  const steps = 160;
+
+  const body = new THREE.Shape();
+  body.moveTo(-FUJI.halfWidth - 6, -8);
+  for (let i = 0; i <= steps; i++) {
+    const x = -FUJI.halfWidth + (i / steps) * FUJI.halfWidth * 2;
+    body.lineTo(x, fujiHeight(x));
+  }
+  body.lineTo(FUJI.halfWidth + 6, -8);
+  const bodyGeo = verticalGradient(new THREE.ShapeGeometry(body), 0x4e4392, 0x7e6cc2, FUJI.height);
+  group.add(new THREE.Mesh(bodyGeo, new THREE.MeshBasicMaterial({ vertexColors: true, fog: false })));
+
+  // Snow cap: follows the flank down to about 62% of the height, with streaks reaching lower.
+  const rand = rng(7);
+  const snowLine = FUJI.height * 0.62;
+  const snowX = FUJI.rim + (FUJI.halfWidth - FUJI.rim) * (1 - Math.pow(snowLine / FUJI.height, 1 / FUJI.curve));
+  const cap = new THREE.Shape();
+  cap.moveTo(-snowX, fujiHeight(-snowX));
+  for (let i = 0; i <= 60; i++) {
+    const x = -snowX + (i / 60) * snowX * 2;
+    cap.lineTo(x, fujiHeight(x) + 0.05);
+  }
+  // Jagged lower edge from right to left: alternating long streaks down the gullies and short notches.
+  const teeth = 14;
+  for (let i = 1; i < teeth; i++) {
+    const x = snowX - (i / teeth) * snowX * 2;
+    const base = Math.min(fujiHeight(x), snowLine + 1.2);
+    const drop = i % 2 ? 1.6 + rand() * 2.4 : 0.2 + rand() * 0.6;
+    cap.lineTo(x + (rand() - 0.5) * 0.8, base - drop);
+  }
+  cap.lineTo(-snowX, fujiHeight(-snowX));
+  const capGeo = verticalGradient(new THREE.ShapeGeometry(cap), 0xf3d6ea, 0xfff7fb, FUJI.height);
+  const snow = new THREE.Mesh(capGeo, new THREE.MeshBasicMaterial({ vertexColors: true, fog: false }));
+  snow.position.z = 0.05;
+  group.add(snow);
+
+  // Rising above the torii (the classic view), slightly right so the setting sun glows on its left.
+  group.position.set(4, -5, -88);
   return group;
 }
 
@@ -194,7 +244,7 @@ export function createSky(scene) {
   scene.add(dome);
 
   // Layered ridges: far = pale and violet, near = deeper; read like painted game backdrops.
-  scene.add(createRidge({ z: -80, width: 260, height: 14, color: 0xc797c9, seed: 3, peaks: 7, y: -3 }));
+  scene.add(createRidge({ z: -80, width: 260, height: 7, color: 0xc797c9, seed: 3, peaks: 7, y: -3 }));
   scene.add(createFuji());
   scene.add(createRidge({ z: -60, width: 200, height: 9, color: 0xa877b3, seed: 11, peaks: 9, y: -4 }));
   scene.add(createRidge({ z: -46, width: 160, height: 6, color: 0x84609e, seed: 23, peaks: 12, y: -5 }));
@@ -214,7 +264,7 @@ export function createSky(scene) {
   const clouds = [];
   for (const cfg of [
     { x: -16, y: 9, z: -34, s: 2.6, v: 0.25, c: 0xffe1ea },
-    { x: 6, y: 12, z: -42, s: 3.2, v: 0.18, c: 0xffd6e2 },
+    { x: 34, y: 15, z: -42, s: 3.2, v: 0.18, c: 0xffd6e2 },
     { x: 20, y: 8, z: -30, s: 2.2, v: 0.3, c: 0xffe9ef },
     { x: -28, y: 6, z: -24, s: 2.0, v: 0.35, c: 0xffc9d7 },
     { x: 30, y: 13, z: -50, s: 3.6, v: 0.15, c: 0xf8d0ec },
@@ -230,7 +280,7 @@ export function createSky(scene) {
     { x: -15, y: 3.5, z: -22, s: 1.4, seed: 5, tree: true },
     { x: 17, y: 5, z: -26, s: 1.8, seed: 9, shrine: true },
     { x: -26, y: 7, z: -40, s: 2.2, seed: 13, tree: true },
-    { x: 9, y: 9.5, z: -48, s: 1.3, seed: 17 },
+    { x: 30, y: 10, z: -48, s: 1.3, seed: 17 },
     { x: 26, y: 1.5, z: -14, s: 1.1, seed: 21, tree: true },
   ]) {
     const island = createMiniIsland(cfg.seed, cfg);
