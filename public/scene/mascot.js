@@ -17,8 +17,8 @@ const EMOTE_FONT = '"Baloo 2", "Be Vietnam Pro", "M PLUS Rounded 1c", sans-serif
 const POSES = {
   idle: { tilt: 0, pitch: 0, yaw: 0, armL: 0, armR: 0, fwdL: 0, fwdR: 0 },
   thinking: { tilt: 0.12, pitch: -0.14, yaw: 0.1, armL: 0.1, armR: -0.75, fwdL: 0, fwdR: 2.05 },
-  confused: { tilt: 0.36, pitch: 0.04, yaw: -0.1, armL: 0.5, armR: 0.5, fwdL: 0.35, fwdR: 0.35 },
-  happy: { tilt: 0, pitch: -0.12, yaw: 0, armL: 2.25, armR: 2.25, fwdL: 0, fwdR: 0 },
+  confused: { tilt: 0.24, pitch: 0.04, yaw: -0.1, armL: 0.5, armR: 0.5, fwdL: 0.35, fwdR: 0.35 },
+  happy: { tilt: 0, pitch: -0.12, yaw: 0, armL: 1.85, armR: 1.85, fwdL: 0.45, fwdR: 0.45 },
   neutral: { tilt: 0, pitch: 0, yaw: 0, armL: 0.15, armR: 0.15, fwdL: 0, fwdR: 0 },
   sad: { tilt: -0.06, pitch: 0.2, yaw: 0, armL: -0.3, armR: -0.3, fwdL: 0.25, fwdR: 0.25 },
 };
@@ -529,13 +529,16 @@ export function createMascot() {
   const collar = part(new THREE.TorusGeometry(0.305, 0.064, 14, 48), RED, { outline: 0.05 });
   collar.rotation.x = Math.PI / 2;
   collar.scale.set(1, 0.93, 1);
-  collar.position.y = 0.83;
+  // The collar and bell sit on a neck pivot that follows the head tilt, so the band never pokes out.
+  const neck = new THREE.Group();
+  neck.position.y = 0.83;
   const bell = createBell();
   const bellPivot = new THREE.Group();
-  bellPivot.position.set(0, 0.82, 0.32);
+  bellPivot.position.set(0, -0.01, 0.32);
   bell.position.set(0, -0.07, 0.07);
   bellPivot.add(bell);
-  body.add(collar, bellPivot);
+  neck.add(collar, bellPivot);
+  body.add(neck);
 
   // Short legs and flat round white feet.
   for (const x of [-0.19, 0.19]) {
@@ -741,21 +744,24 @@ export function createMascot() {
     head.rotation.z = pose.tilt + (thinking ? Math.sin(t * 1.5) * 0.06 : 0);
     head.rotation.x = pose.pitch + nod - pointerCurrent.y * 0.2;
     head.rotation.y = pose.yaw + pointerCurrent.x * 0.42;
+    neck.rotation.z = head.rotation.z * 0.85;
+    neck.rotation.y = head.rotation.y * 0.3;
 
     bellPivot.rotation.z = Math.sin(t * speed * 1.5) * 0.25;
     bellPivot.rotation.x = -0.15 + Math.sin(t * speed * 1.1) * 0.08 - hop * 0.6;
     tail.rotation.y = Math.sin(t * (happy ? 9 : sad ? 1.5 : 3)) * (happy ? 0.5 : 0.2);
 
-    // Pulling the score sign out of the 4D pocket: the left hand reaches up to it, then relaxes.
-    const pulling = crest.group.visible && crestAge < 2;
-    reach += ((pulling ? 1 : 0) - reach) * (1 - Math.exp(-dt * 8));
-    const armL = pose.armL + reach * (2.3 - pose.armL);
+    // Pulling the score sign out of the 4D pocket: the left hand reaches up with it, then keeps
+    // presenting it (a little lower when sad) for as long as the sign is shown.
+    const reachTarget = !crest.group.visible ? 0 : crestAge < 2 ? 1 : sad ? 0.55 : 0.9;
+    reach += (reachTarget - reach) * (1 - Math.exp(-dt * 8));
+    const armL = pose.armL + reach * (1.75 - pose.armL);
     // Positive pose values raise each arm outward.
     leftArm.rotation.z = -armL - Math.sin(t * speed) * 0.08 - (happy ? Math.sin(t * 9) * 0.25 : 0);
     // A pat makes Doraemon wave back with his right hand.
     const wave = Math.sin(petBounce * Math.PI) * (2 + Math.sin(t * 14) * 0.3);
     rightArm.rotation.z = pose.armR + wave + Math.sin(t * speed) * 0.08 + (happy ? Math.sin(t * 9 + 1) * 0.25 : 0);
-    leftArm.rotation.x = -pose.fwdL * (1 - reach);
+    leftArm.rotation.x = -(pose.fwdL + reach * (0.6 - pose.fwdL));
     rightArm.rotation.x = -pose.fwdR + (thinking ? Math.sin(t * 4) * 0.06 : 0);
 
     // Take-copter pops up when happy; sweat drop when confused.
@@ -801,14 +807,15 @@ export function createMascot() {
 
     // Crest: flies up out of the pocket, then an elastic pop, spinning rays and a gentle float.
     if (crest.group.visible) {
-      const fly = Math.min(1, crestAge / 0.85);
-      const e = 1 - (1 - fly) ** 3;
+      const fly = Math.min(1, crestAge / 1.25);
+      // Ease in-out: lingers at the pocket first so the pull reads, then glides up beside him.
+      const e = fly < 0.5 ? 4 * fly ** 3 : 1 - (-2 * fly + 2) ** 3 / 2;
       crestFrom.copy(POCKET);
       crestFrom.y += body.position.y;
       crest.group.position.lerpVectors(crestFrom, CREST_POS, e);
       crest.group.position.y += Math.sin(e * Math.PI) * 0.5 + Math.sin(t * 1.8) * 0.06 * e;
       crest.group.position.z += Math.sin(e * Math.PI) * 0.7; // arc in front of the head, never behind it
-      const k = Math.min(1, Math.max(0, crestAge - 0.6) * 1.8);
+      const k = Math.min(1, Math.max(0, crestAge - 1.0) * 1.8);
       const elastic = k >= 1 ? 1 : 1 - Math.pow(2, -10 * k) * Math.cos(k * Math.PI * 4.5);
       crest.group.scale.setScalar(0.12 + (0.5 * e) + 0.38 * elastic);
       crest.rays.material.rotation = t * 0.5;
