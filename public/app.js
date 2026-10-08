@@ -95,7 +95,7 @@ import('./scene/index.js')
   })
   .finally(() => document.body.classList.add('scene-ready'));
 
-const state = { prompt: '', questions: [], result: null, busy: false };
+const state = { prompt: '', questions: [], result: null, busy: false, compare: null };
 
 const rankFor = score => (score >= 90 ? 'S' : score >= 80 ? 'A' : score >= 60 ? 'B' : 'C');
 const moodFor = score => (score >= 80 ? 'happy' : score >= 50 ? 'neutral' : 'sad');
@@ -132,6 +132,8 @@ function applyLanguage(lang) {
   }
   if (state.busy) $('status-text').textContent = tr(busyKey);
   if (state.result) renderScore(state.result);
+  if (state.compare) renderCompare(state.compare);
+  if (!$('toast').hidden) $('toast-text').textContent = toastMessage();
   swapPresetText(previous);
   scene.setLang(currentLang);
 }
@@ -193,9 +195,12 @@ function setBusy(on, textKey = 'busyThinking') {
 }
 
 let toastTimer;
-function showToast(text, kind = 'error') {
+let toastMessage = () => '';
+// `message` is a function returning the text, so an open toast can be re-translated by applyLanguage().
+function showToast(message, kind = 'error') {
   clearTimeout(toastTimer);
-  $('toast-text').textContent = text;
+  toastMessage = message;
+  $('toast-text').textContent = message();
   $('toast').classList.toggle('success', kind === 'success');
   $('toast').hidden = false;
   if (kind === 'success') {
@@ -219,19 +224,19 @@ class ApiError extends Error {
 }
 
 // User-facing text for an error: the translated message for its code, plus the technical detail
-// (e.g. the Gemini API message) when the server sent one.
+// when the server sent one (only GEMINI_FAILED does: the raw Gemini API message).
 function errorText(err) {
   const code = err?.code;
   if (!code) return err?.message || tr('error.UNKNOWN');
   const key = `error.${code}`;
   const text = tr(key, err.params);
   if (text === key) return err.message || tr('error.UNKNOWN');
-  return err.params?.detail ? `${text} (${err.params.detail})` : text;
+  return code === 'GEMINI_FAILED' && err.params?.detail ? `${text} (${err.params.detail})` : text;
 }
 
 function fail(err) {
   console.warn(err);
-  showToast(errorText(err));
+  showToast(() => errorText(err));
   scene.setMood('sad');
 }
 
@@ -451,6 +456,25 @@ async function streamEvents(path, body, onEvent) {
   if (buffer.trim()) onEvent(JSON.parse(buffer));
 }
 
+// Draws both compare columns from state.compare, so applyLanguage() can redraw them in a new language.
+// While streaming, a side without text keeps its placeholder; once finished, errors and cut-off
+// answers are shown.
+function renderCompare({ sides, finished }) {
+  for (const side of Object.values(sides)) {
+    const el = $(`compare-${side.name}`);
+    if (!finished) {
+      if (side.text) renderAnswer(el, { text: side.text }, side.status === 'streaming');
+      else placeholder(el, tr(side.placeholderKey));
+    } else if (side.status === 'error') {
+      renderAnswer(el, { text: side.text, error: side.error });
+    } else if (side.text) {
+      renderAnswer(el, { text: side.text });
+    } else {
+      renderAnswer(el, { error: { message: tr('answerCutOff') } });
+    }
+  }
+}
+
 async function tryIt() {
   if (state.busy || !state.result) return;
   hideToast();
@@ -458,24 +482,21 @@ async function tryIt() {
 
   $('compare-original-prompt').textContent = state.prompt;
   $('compare-improved-prompt').textContent = state.result.improvedPrompt;
-  placeholder($('compare-original'), tr('placeholderOriginal'));
-  placeholder($('compare-improved'), tr('placeholderImproved'));
+  const sides = {
+    original: { name: 'original', placeholderKey: 'placeholderOriginal', text: '', status: 'pending' },
+    improved: { name: 'improved', placeholderKey: 'placeholderImproved', text: '', status: 'pending' },
+  };
+  const compare = (state.compare = { sides, finished: false });
+  renderCompare(compare);
 
   show('compare');
   scene.setMood('thinking');
   setBusy(true, 'busyComparing');
 
-  const sides = {
-    original: { el: $('compare-original'), text: '', status: 'pending' },
-    improved: { el: $('compare-improved'), text: '', status: 'pending' },
-  };
-
   let frame = 0;
   const render = () => {
     frame = 0;
-    for (const side of Object.values(sides)) {
-      if (side.text) renderAnswer(side.el, { text: side.text }, side.status === 'streaming');
-    }
+    renderCompare(compare);
   };
 
   try {
@@ -499,11 +520,8 @@ async function tryIt() {
       },
     );
     cancelAnimationFrame(frame);
-    for (const side of Object.values(sides)) {
-      if (side.status === 'error' && !side.text) renderAnswer(side.el, { error: side.error });
-      else if (side.text) renderAnswer(side.el, { text: side.text, error: side.status === 'error' ? side.error : null });
-      else renderAnswer(side.el, { error: { message: tr('answerCutOff') } });
-    }
+    compare.finished = true;
+    renderCompare(compare);
     const success = sides.improved.status === 'done';
     scene.setMood(success ? 'happy' : 'sad');
     if (success) {
@@ -514,7 +532,9 @@ async function tryIt() {
     }
   } catch (err) {
     cancelAnimationFrame(frame);
-    for (const side of Object.values(sides)) renderAnswer(side.el, { text: side.text, error: err });
+    for (const side of Object.values(sides)) Object.assign(side, { status: 'error', error: err });
+    compare.finished = true;
+    renderCompare(compare);
     fail(err);
   } finally {
     setBusy(false);
@@ -537,7 +557,7 @@ function goToInput() {
 function submitPrompt() {
   const prompt = $('prompt-input').value.trim();
   if (!prompt) {
-    showToast(tr('toastPromptEmpty'));
+    showToast(() => tr('toastPromptEmpty'));
     return;
   }
   state.prompt = prompt;
@@ -674,9 +694,9 @@ $('skip-btn').addEventListener('click', () => evaluate([]));
 $('copy-btn').addEventListener('click', async () => {
   try {
     await navigator.clipboard.writeText(state.result.improvedPrompt);
-    showToast(tr('toastCopied'), 'success');
+    showToast(() => tr('toastCopied'), 'success');
   } catch {
-    showToast(tr('toastCopyError'));
+    showToast(() => tr('toastCopyError'));
   }
 });
 
@@ -686,7 +706,7 @@ $('use-btn').addEventListener('click', () => {
   audio.playPop(520);
   goToInput();
   if (improved.length > MAX_CHARS) {
-    showToast(tr('toastTruncated', { max: MAX_CHARS }));
+    showToast(() => tr('toastTruncated', { max: MAX_CHARS }));
   }
 });
 

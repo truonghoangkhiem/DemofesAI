@@ -67,6 +67,7 @@ test('invalid JSON twice gives a readable GeminiError', async () => {
   await assert.rejects(createGemini({ generate, model: 'm' }).evaluate('p'), err => {
     assert.match(err.message, /unexpected answer/);
     assert.equal(err.code, 'GEMINI_BAD_RESPONSE');
+    assert.equal(err.params?.detail, undefined); // internal schema text is not shown to users
     return true;
   });
 });

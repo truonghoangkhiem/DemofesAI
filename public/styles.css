@@ -1275,6 +1275,7 @@ details summary:hover { color: var(--gold); }
   clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
 }
 .guide-steps strong { color: var(--gold); }
+.guide-steps em { white-space: nowrap; } /* keep a quoted button name (emoji + label) on one line */
 .guide-tip-box {
   background: rgba(255, 95, 162, 0.12);
   border: 1.5px solid rgba(255, 95, 162, 0.5);

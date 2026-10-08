@@ -371,7 +371,7 @@ export const I18N = {
     overallScoreLabel: '総合スコア',
     overallScoreAria: '総合スコア：100点中{score}点',
     titleExcellent: 'すごい！素晴らしいプロンプトです',
-    titleGood: 'いい調子です、この調子で！',
+    titleGood: 'その調子です！',
     titleNeedsWork: 'もう少し改善が必要です',
     rubricHeading: '9つの評価基準の詳細',
     'criterion.clarity': '明確さ',
