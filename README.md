@@ -21,6 +21,8 @@ Open http://localhost:3000.
 | `GEMINI_API_KEY` | — | Required. Get one at https://aistudio.google.com/apikey |
 | `GEMINI_MODEL` | `gemini-flash-latest` | Set the exact Flash model ID you want to demo |
 | `PORT` | `3000` | |
+| `GEMINI_THINKING_LEVEL` | `low` | How long Gemini "thinks" first. `low` is fast enough for a live demo; `high` is slower; `none` for models without thinking levels |
+| `GEMINI_TIMEOUT_SECONDS` | `90` | Max wait for an answer (for Try it: max wait between streamed chunks) |
 
 ## Demo flow
 

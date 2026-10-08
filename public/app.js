@@ -36,10 +36,20 @@ function show(view) {
 }
 
 // #status stays in the accessibility tree (only visually hidden when idle) so its live region is announced.
+// While busy, a visible seconds counter shows the demo is still working (Gemini can take 10–20 s).
+let busyTimer;
 function setBusy(on, text = 'Sensei is thinking…') {
   state.busy = on;
+  clearInterval(busyTimer);
   $('status').classList.toggle('sr-only', !on);
   $('status-text').textContent = on ? text : '';
+  $('status-seconds').textContent = '';
+  if (on) {
+    const started = Date.now();
+    busyTimer = setInterval(() => {
+      $('status-seconds').textContent = `${Math.floor((Date.now() - started) / 1000)} s`;
+    }, 1000);
+  }
   for (const el of $('panel').querySelectorAll('button, textarea')) el.disabled = on;
 }
 
@@ -170,15 +180,27 @@ function renderResult(data) {
   scene.showScore(data.overall);
 }
 
-function renderAnswer(el, side) {
+// Renders markdown answer text (sanitized), an optional error line, and a typing cursor while streaming.
+function renderAnswer(el, side, streaming = false) {
+  const nodes = [];
   if (side?.text) {
-    el.innerHTML = DOMPurify.sanitize(marked.parse(side.text));
-  } else {
+    const answer = document.createElement('div');
+    answer.innerHTML = DOMPurify.sanitize(marked.parse(side.text));
+    nodes.push(answer);
+  }
+  if (streaming) {
+    const cursor = document.createElement('span');
+    cursor.className = 'typing-cursor';
+    cursor.setAttribute('aria-hidden', 'true');
+    nodes.push(cursor);
+  }
+  if (side?.error || !side?.text) {
     const p = document.createElement('p');
     p.className = 'error';
     p.textContent = side?.error || 'No answer.';
-    el.replaceChildren(p);
+    nodes.push(p);
   }
+  el.replaceChildren(...nodes);
 }
 
 function placeholder(el, text) {
@@ -188,24 +210,79 @@ function placeholder(el, text) {
   el.replaceChildren(p);
 }
 
+// Reads the NDJSON stream from /api/try and calls onEvent for each parsed line.
+async function streamEvents(path, body, onEvent) {
+  const res = await fetch(path, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || `Request failed (${res.status}).`);
+  }
+  const reader = res.body.pipeThrough(new TextDecoderStream()).getReader();
+  let buffer = '';
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffer += value;
+    const lines = buffer.split('\n');
+    buffer = lines.pop();
+    for (const line of lines) if (line.trim()) onEvent(JSON.parse(line));
+  }
+  if (buffer.trim()) onEvent(JSON.parse(buffer));
+}
+
 async function tryIt() {
   if (state.busy || !state.result) return;
   hideToast();
   $('compare-original-prompt').textContent = state.prompt;
   $('compare-improved-prompt').textContent = state.result.improvedPrompt;
-  placeholder($('compare-original'), 'Asking Gemini…');
-  placeholder($('compare-improved'), 'Asking Gemini…');
+  placeholder($('compare-original'), 'Gemini is thinking…');
+  placeholder($('compare-improved'), 'Gemini is thinking…');
   show('compare');
   scene.setMood('thinking');
   setBusy(true, 'Running both prompts…');
+
+  const sides = {
+    original: { el: $('compare-original'), text: '', status: 'pending' },
+    improved: { el: $('compare-improved'), text: '', status: 'pending' },
+  };
+  // Markdown is re-rendered at most once per frame while text streams in.
+  let frame = 0;
+  const render = () => {
+    frame = 0;
+    for (const side of Object.values(sides)) {
+      if (side.text) renderAnswer(side.el, { text: side.text }, side.status === 'streaming');
+    }
+  };
+
   try {
-    const data = await api('/api/try', { original: state.prompt, improved: state.result.improvedPrompt });
-    renderAnswer($('compare-original'), data.original);
-    renderAnswer($('compare-improved'), data.improved);
-    scene.setMood(data.improved?.text ? 'happy' : 'sad');
+    await streamEvents('/api/try', { original: state.prompt, improved: state.result.improvedPrompt }, event => {
+      const side = sides[event.side];
+      if (!side) return;
+      if (event.text) {
+        side.text += event.text;
+        side.status = 'streaming';
+        frame ||= requestAnimationFrame(render);
+      } else if (event.done) {
+        side.status = 'done';
+      } else if (event.error) {
+        side.status = 'error';
+        side.error = event.error;
+      }
+    });
+    cancelAnimationFrame(frame);
+    for (const side of Object.values(sides)) {
+      if (side.status === 'error' && !side.text) renderAnswer(side.el, { error: side.error });
+      else if (side.text) renderAnswer(side.el, { text: side.text, error: side.status === 'error' ? side.error : null });
+      else renderAnswer(side.el, { error: 'The answer was cut off. Please try again.' });
+    }
+    scene.setMood(sides.improved.status === 'done' ? 'happy' : 'sad');
   } catch (err) {
-    renderAnswer($('compare-original'), { error: err.message });
-    renderAnswer($('compare-improved'), { error: err.message });
+    cancelAnimationFrame(frame);
+    for (const side of Object.values(sides)) renderAnswer(side.el, { text: side.text, error: err.message });
     fail(err);
   } finally {
     setBusy(false);

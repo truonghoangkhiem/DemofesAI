@@ -163,6 +163,9 @@ details summary { cursor: pointer; font-weight: 700; color: var(--ink-soft); mar
 .answer td, .answer th { border: 1px solid var(--line); padding: 4px 8px; }
 .answer .placeholder { color: var(--ink-soft); font-style: italic; }
 .answer .error { color: var(--hanko); font-weight: 800; }
+.status-seconds { margin-left: auto; font-variant-numeric: tabular-nums; color: var(--ink-soft); }
+.typing-cursor { display: inline-block; width: 0.55em; height: 1.1em; margin-left: 2px; vertical-align: text-bottom; background: var(--sakura-deep); animation: blink 1s steps(2, start) infinite; }
+@keyframes blink { to { visibility: hidden; } }
 
 .toast {
   position: fixed; left: 16px; right: 16px; bottom: 24px;
@@ -213,6 +216,6 @@ details summary { cursor: pointer; font-weight: 700; color: var(--ink-soft); mar
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .hanko, .spinner { animation: none; }
+  .hanko, .spinner, .typing-cursor { animation: none; }
   .bar > span, .btn { transition: none; }
 }

@@ -83,37 +83,117 @@ test('skip ([]) that still gets questions twice fails with GeminiError', async (
   });
 });
 
-test('a hanging call times out, retries, then throws GeminiError', async () => {
+test('a hanging call times out once and is not retried', async () => {
   const calls = [];
   const generate = request => { calls.push(request); return new Promise(() => {}); };
-  await assert.rejects(createGemini({ generate, model: 'm', timeoutMs: 20 }).evaluate('p'), /did not answer within/);
-  assert.equal(calls.length, 2);
-  for (const call of calls) assert.equal(call.config.abortSignal.aborted, true);
+  await assert.rejects(createGemini({ generate, model: 'm', timeoutMs: 20 }).evaluate('p'), err => {
+    assert.ok(err instanceof GeminiError);
+    assert.match(err.message, /did not answer within/);
+    return true;
+  });
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].config.abortSignal.aborted, true);
 });
 
 test('a successful call is not aborted', async () => {
-  const { generate, calls } = fakeGenerate('Answer text');
-  await createGemini({ generate, model: 'm', timeoutMs: 20 }).runPrompt('Hello');
+  const { generate, calls } = fakeGenerate(evaluated);
+  await createGemini({ generate, model: 'm', timeoutMs: 20 }).evaluate('p');
   await new Promise(resolve => setTimeout(resolve, 40));
   assert.equal(calls[0].config.abortSignal.aborted, false);
 });
 
-test('runPrompt sends the raw prompt with no system instruction', async () => {
-  const { generate, calls } = fakeGenerate('Answer text');
-  const text = await createGemini({ generate, model: 'm' }).runPrompt('Hello');
-  assert.equal(text, 'Answer text');
-  assert.equal(calls[0].contents, 'Hello');
-  assert.equal(calls[0].config.systemInstruction, undefined);
+test('evaluate sends a low thinking level by default, or none when disabled', async () => {
+  const first = fakeGenerate(evaluated);
+  await createGemini({ generate: first.generate, model: 'm' }).evaluate('p');
+  assert.deepEqual(first.calls[0].config.thinkingConfig, { thinkingLevel: 'low' });
+  const second = fakeGenerate(evaluated);
+  await createGemini({ generate: second.generate, model: 'm', thinkingLevel: null }).evaluate('p');
+  assert.equal(second.calls[0].config.thinkingConfig, undefined);
 });
 
-test('runPrompt retries an empty answer then throws', async () => {
-  const { generate, calls } = fakeGenerate('', '   ');
-  await assert.rejects(createGemini({ generate, model: 'm' }).runPrompt('Hello'), /empty answer/);
+test('a model that rejects the thinking level is retried without it, and remembered', async () => {
+  const rejected = new Error('{"error":{"code":400,"message":"Thinking level LOW is not supported for this model."}}');
+  const { generate, calls } = fakeGenerate(rejected, evaluated, evaluated);
+  const gemini = createGemini({ generate, model: 'm' });
+  assert.equal((await gemini.evaluate('p')).status, 'evaluated');
+  await gemini.evaluate('p');
+  assert.equal(calls.length, 3);
+  assert.ok(calls[0].config.thinkingConfig);
+  assert.equal(calls[1].config.thinkingConfig, undefined);
+  assert.equal(calls[2].config.thinkingConfig, undefined);
+});
+
+// generateStream() fake: each attempt is a list of chunks; an Error item is thrown, 'HANG' never resolves.
+function fakeStream(...attempts) {
+  const calls = [];
+  async function* generateStream(request) {
+    calls.push(request);
+    for (const item of attempts.shift() ?? []) {
+      if (item instanceof Error) throw item;
+      if (item === 'HANG') await new Promise(() => {});
+      yield item;
+    }
+  }
+  return { generateStream, calls };
+}
+
+test('streamPrompt sends the raw prompt with no system instruction and forwards chunks', async () => {
+  const { generateStream, calls } = fakeStream(['Hel', 'lo']);
+  const chunks = [];
+  await createGemini({ generateStream, model: 'm' }).streamPrompt('Hi', text => chunks.push(text));
+  assert.deepEqual(chunks, ['Hel', 'lo']);
+  assert.equal(calls[0].contents, 'Hi');
+  assert.equal(calls[0].model, 'm');
+  assert.equal(calls[0].config.systemInstruction, undefined);
+  assert.deepEqual(calls[0].config.thinkingConfig, { thinkingLevel: 'low' });
+});
+
+test('streamPrompt retries an error that happens before any text', async () => {
+  const { generateStream, calls } = fakeStream([new Error('503 overloaded')], ['ok']);
+  const chunks = [];
+  await createGemini({ generateStream, model: 'm' }).streamPrompt('Hi', text => chunks.push(text));
+  assert.deepEqual(chunks, ['ok']);
   assert.equal(calls.length, 2);
+});
+
+test('streamPrompt does not retry after text was sent', async () => {
+  const { generateStream, calls } = fakeStream(['part', new Error('connection reset')], ['never']);
+  const chunks = [];
+  await assert.rejects(
+    createGemini({ generateStream, model: 'm' }).streamPrompt('Hi', text => chunks.push(text)),
+    err => err instanceof GeminiError && /connection reset/.test(err.message),
+  );
+  assert.deepEqual(chunks, ['part']);
+  assert.equal(calls.length, 1);
+});
+
+test('streamPrompt times out between chunks without retrying and aborts the request', async () => {
+  const { generateStream, calls } = fakeStream(['part', 'HANG']);
+  await assert.rejects(
+    createGemini({ generateStream, model: 'm', timeoutMs: 20 }).streamPrompt('Hi', () => {}),
+    /did not answer within/,
+  );
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].config.abortSignal.aborted, true);
+});
+
+test('streamPrompt reports an empty answer after one retry', async () => {
+  const { generateStream, calls } = fakeStream([], ['']);
+  await assert.rejects(createGemini({ generateStream, model: 'm' }).streamPrompt('Hi', () => {}), /empty answer/);
+  assert.equal(calls.length, 2);
+});
+
+test('streamPrompt stops promptly when the caller aborts', async () => {
+  const { generateStream, calls } = fakeStream(['part', 'HANG']);
+  const controller = new AbortController();
+  const done = createGemini({ generateStream, model: 'm' })
+    .streamPrompt('Hi', () => controller.abort(), { signal: controller.signal });
+  await assert.rejects(done, /cancelled/);
+  assert.equal(calls[0].config.abortSignal.aborted, true);
 });
 
 test('long API error messages are truncated', async () => {
   const long = new Error('x'.repeat(2000));
   const { generate } = fakeGenerate(long, long);
-  await assert.rejects(createGemini({ generate, model: 'm' }).runPrompt('Hello'), err => err.message.length <= 330);
+  await assert.rejects(createGemini({ generate, model: 'm' }).evaluate('p'), err => err.message.length <= 330);
 });

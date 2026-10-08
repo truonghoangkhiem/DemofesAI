@@ -25,10 +25,10 @@ function post(base, path, body, { raw } = {}) {
 const evaluation = { status: 'evaluated', overall: 50, criteria: [], strengths: [], improvedPrompt: 'B', tips: [] };
 
 function fakeGemini(overrides = {}) {
-  const calls = { evaluate: [], runPrompt: [] };
+  const calls = { evaluate: [], streamPrompt: [] };
   const gemini = {
     async evaluate(...args) { calls.evaluate.push(args); return evaluation; },
-    async runPrompt(prompt) { calls.runPrompt.push(prompt); return `answer to ${prompt}`; },
+    async streamPrompt(prompt, onText) { calls.streamPrompt.push(prompt); onText("answer "); onText(`to ${prompt}`); },
     ...overrides,
   };
   return { gemini, calls };
@@ -139,27 +139,76 @@ test('missing API key gives 500 with setup instructions', async () => {
   });
 });
 
-test('try runs both prompts', async () => {
+// Collects an NDJSON /api/try response into { side: { text, done, error } }.
+async function readTry(res) {
+  assert.match(res.headers.get('content-type'), /application\/x-ndjson/);
+  const sides = {};
+  for (const line of (await res.text()).split('\n').filter(Boolean)) {
+    const event = JSON.parse(line);
+    const side = (sides[event.side] ??= { text: '' });
+    if (event.text) side.text += event.text;
+    if (event.done) side.done = true;
+    if (event.error) side.error = event.error;
+  }
+  return sides;
+}
+
+test('try streams both answers', async () => {
   const { gemini, calls } = fakeGemini();
   await withServer(gemini, async base => {
     const res = await post(base, '/api/try', { original: ' A ', improved: 'B' });
     assert.equal(res.status, 200);
-    assert.deepEqual(await res.json(), { original: { text: 'answer to A' }, improved: { text: 'answer to B' } });
-    assert.deepEqual(calls.runPrompt.sort(), ['A', 'B']);
+    assert.deepEqual(await readTry(res), {
+      original: { text: 'answer to A', done: true },
+      improved: { text: 'answer to B', done: true },
+    });
+    assert.deepEqual(calls.streamPrompt.sort(), ['A', 'B']);
   });
 });
 
-test('try returns the successful side when the other fails', async () => {
+test('try keeps the successful side when the other fails, including partial text', async () => {
   const { gemini } = fakeGemini({
-    async runPrompt(prompt) {
-      if (prompt === 'A') throw new GeminiError('Gemini returned an empty answer.');
-      return 'good';
+    async streamPrompt(prompt, onText) {
+      if (prompt === 'A') {
+        onText('half ');
+        throw new GeminiError('Gemini did not answer within 90 s.');
+      }
+      if (prompt === 'C') throw new Error('secret internals');
+      onText('good');
     },
   });
   await withServer(gemini, async base => {
     const res = await post(base, '/api/try', { original: 'A', improved: 'B' });
-    assert.equal(res.status, 200);
-    assert.deepEqual(await res.json(), { original: { error: 'Gemini returned an empty answer.' }, improved: { text: 'good' } });
+    assert.deepEqual(await readTry(res), {
+      original: { text: 'half ', error: 'Gemini did not answer within 90 s.' },
+      improved: { text: 'good', done: true },
+    });
+    const hidden = await readTry(await post(base, '/api/try', { original: 'C', improved: 'B' }));
+    assert.deepEqual(hidden.original, { text: '', error: 'Gemini request failed.' });
+  });
+});
+
+test('try cancels Gemini streams when the client disconnects', async () => {
+  let signalSeen;
+  const { gemini } = fakeGemini({
+    streamPrompt(prompt, onText, { signal }) {
+      signalSeen = signal;
+      onText('start');
+      return new Promise((resolve, reject) => signal.addEventListener('abort', () => reject(new GeminiError('Request cancelled.'))));
+    },
+  });
+  await withServer(gemini, async base => {
+    const controller = new AbortController();
+    const res = await fetch(base + '/api/try', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ original: 'A', improved: 'B' }),
+      signal: controller.signal,
+    });
+    await res.body.getReader().read();
+    controller.abort();
+    await new Promise(resolve => setTimeout(resolve, 50));
+    assert.equal(signalSeen.aborted, true);
   });
 });
 
@@ -180,7 +229,7 @@ test('try accepts an improved prompt longer than the input limit', async () => {
     const tooLong = await post(base, '/api/try', { original: 'a', improved: 'b'.repeat(8001) });
     assert.equal(tooLong.status, 400);
   });
-  assert.equal(calls.runPrompt.length, 2);
+  assert.equal(calls.streamPrompt.length, 2);
 });
 
 test('unknown API routes give a JSON 404', async () => {
