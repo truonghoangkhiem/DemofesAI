@@ -12,7 +12,7 @@ export const LANGS = [
 export const DEFAULT_LANG = 'vi';
 
 // The 3D mascot's speech bubbles, one per mood (titles + subtitles live in I18N as emote.<mood>.*).
-export const EMOTE_MOODS = ['thinking', 'confused', 'happy', 'neutral', 'sad', 'pet'];
+export const EMOTE_MOODS = ['thinking', 'confused', 'happy', 'neutral', 'sad', 'pet', 'greet'];
 
 // Rubric criterion ids (names are translated here; the server keeps English names).
 export const CRITERION_IDS = [
@@ -172,6 +172,8 @@ export const I18N = {
     'emote.sad.sub': 'Thử lại với tớ nhé',
     'emote.pet.title': 'Tớ là Doraemon!',
     'emote.pet.sub': 'Tớ luôn ủng hộ cậu!',
+    'emote.greet.title': 'Konnichiwa!',
+    'emote.greet.sub': 'Hôm nay cậu muốn hỏi gì nào?',
 
     'error.MISSING_KEY': 'Chưa cấu hình GEMINI_API_KEY. Hãy thêm vào file .env rồi khởi động lại server.',
     'error.EMPTY_PROMPT': 'Prompt không được để trống.',
@@ -306,6 +308,8 @@ export const I18N = {
     'emote.sad.sub': "Let's try again!",
     'emote.pet.title': "I'm Doraemon!",
     'emote.pet.sub': "I'm cheering for you!",
+    'emote.greet.title': 'Konnichiwa!',
+    'emote.greet.sub': 'What would you like to ask?',
 
     'error.MISSING_KEY': 'GEMINI_API_KEY is not set. Add it to .env and restart the server.',
     'error.EMPTY_PROMPT': 'The prompt must not be empty.',
@@ -440,6 +444,8 @@ export const I18N = {
     'emote.sad.sub': 'もう一回やってみよう！',
     'emote.pet.title': 'ぼくドラえもん',
     'emote.pet.sub': 'きみを応援してるよ！',
+    'emote.greet.title': 'こんにちは！',
+    'emote.greet.sub': 'きょうは何を聞きたいの？',
 
     'error.MISSING_KEY': 'GEMINI_API_KEY が設定されていません。.env に追加してサーバーを再起動してください。',
     'error.EMPTY_PROMPT': 'プロンプトを入力してください。',

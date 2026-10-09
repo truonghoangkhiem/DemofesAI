@@ -44,7 +44,7 @@ test('placeholders are the same in every language', () => {
 
 test('Vietnamese and Japanese texts are actually translated', () => {
   // Keys that may legitimately read the same in English (names, flavour words, symbols).
-  const same = new Set(['guideBtn', 'nameplate', 'emote.thinking.title', 'emote.happy.title', 'emote.pet.title', 'seconds', 'notAssessed']);
+  const same = new Set(['guideBtn', 'nameplate', 'emote.thinking.title', 'emote.happy.title', 'emote.pet.title', 'emote.greet.title', 'seconds', 'notAssessed']);
   const japanese = /[぀-ヿ一-鿿]/;
   for (const key of allKeys) {
     if (same.has(key)) continue;

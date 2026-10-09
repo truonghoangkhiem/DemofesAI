@@ -31,6 +31,7 @@ const EMOTE_COLORS = {
   neutral: '#2fae7c',
   sad: '#5a72e0',
   pet: '#ff4f8b',
+  greet: '#ff9f1c',
 };
 const emoteFor = (lang, key) => [t(lang, `emote.${key}.title`), t(lang, `emote.${key}.sub`), EMOTE_COLORS[key]];
 
@@ -712,6 +713,13 @@ export function createMascot() {
     showEmote('pet', 2.8);
   }
 
+  // Welcome wave once the camera has flown in; skipped if the user is already busy.
+  function greet() {
+    if (mood !== 'idle') return;
+    petBounce = 1;
+    showEmote('greet', 6);
+  }
+
   function setPointer(nx, ny) {
     pointerTarget.x = THREE.MathUtils.clamp(nx, -1, 1);
     pointerTarget.y = THREE.MathUtils.clamp(ny, -1, 1);
@@ -841,5 +849,5 @@ export function createMascot() {
     }
   }
 
-  return { group, hitbox, update, setMood, setLang, showScore, hideScore, pet, setPointer };
+  return { group, hitbox, update, setMood, setLang, showScore, hideScore, pet, greet, setPointer };
 }

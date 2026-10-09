@@ -208,6 +208,7 @@ export async function initScene(canvas, panelEl = document.getElementById('panel
   // The fly-in waits until the loader has faded and advances by at most 0.1 s per frame,
   // so start-up hitches cannot use up the animation while nobody can see it.
   let introDelay = INTRO_DELAY;
+  let greetWait = reducedMotion ? INTRO_DELAY + 0.5 : 0.3;
   const introFrom = new THREE.Vector3(-9, 9, 24);
   const introLookFrom = new THREE.Vector3(0, 3, -12);
 
@@ -340,6 +341,11 @@ export async function initScene(canvas, panelEl = document.getElementById('panel
       const smooth = 1 - Math.exp(-camDt * 3.5);
       camera.position.lerp(camPos, smooth);
       lookCurrent.lerp(camLook, smooth);
+      // Doraemon says hello once the fly-in has landed (or once the loader is gone without it).
+      if (greetWait > 0) {
+        greetWait -= camDt;
+        if (greetWait <= 0) mascot.greet();
+      }
     }
     camera.lookAt(lookCurrent);
 
