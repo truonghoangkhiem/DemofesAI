@@ -8,8 +8,7 @@ import { rimUniforms } from './toon.js';
 
 const MOBILE_QUERY = '(max-width: 800px)';
 const DAIS_TOP = 0.34;
-const INTRO_SECONDS = 3.4;
-const INTRO_DELAY = 0.6; // seconds after the first frame, roughly the loader's fade-out
+const GREET_DELAY = 1.0; // seconds after the first frame: the loader has faded by then
 
 const MOOD_RIM = {
   idle: [0xffc9a0, 0.55],
@@ -20,7 +19,6 @@ const MOOD_RIM = {
   sad: [0x9fb0ff, 0.45],
 };
 
-const easeInOutCubic = x => (x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2);
 const timeout = ms => new Promise(resolve => setTimeout(resolve, ms, 'timeout'));
 
 // Hands the main thread back so the loading screen keeps animating between setup steps.
@@ -203,14 +201,7 @@ export async function initScene(canvas, panelEl = document.getElementById('panel
   const cameraTargetPos = new THREE.Vector3();
   const lookTarget = new THREE.Vector3();
   const lookCurrent = new THREE.Vector3();
-  const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  let introT = reducedMotion ? 1 : 0;
-  // The fly-in waits until the loader has faded and advances by at most 0.1 s per frame,
-  // so start-up hitches cannot use up the animation while nobody can see it.
-  let introDelay = INTRO_DELAY;
-  let greetWait = reducedMotion ? INTRO_DELAY + 0.5 : 0.3;
-  const introFrom = new THREE.Vector3(-9, 9, 24);
-  const introLookFrom = new THREE.Vector3(0, 3, -12);
+  let greetWait = GREET_DELAY;
 
   const pointer = { x: 0, y: 0 };
   const raycaster = new THREE.Raycaster();
@@ -275,9 +266,9 @@ export async function initScene(canvas, panelEl = document.getElementById('panel
   observer.observe(canvas);
   if (panelEl) observer.observe(panelEl);
   updateCameraTargets();
-  // Start at the intro position (or straight at the target) so the first frame never looks wrong.
-  camera.position.copy(introT < 1 ? introFrom : cameraTargetPos);
-  lookCurrent.copy(introT < 1 ? introLookFrom : lookTarget);
+  // No fly-in: the first frame already looks at Doraemon.
+  camera.position.copy(cameraTargetPos);
+  lookCurrent.copy(lookTarget);
   camera.lookAt(lookCurrent);
   resize();
 
@@ -328,26 +319,15 @@ export async function initScene(canvas, panelEl = document.getElementById('panel
     const parallaxY = pointer.y * 0.2;
     camPos.set(cameraTargetPos.x + parallaxX, cameraTargetPos.y + parallaxY, cameraTargetPos.z);
     camLook.copy(lookTarget);
-    if (introT < 1) {
-      if (introDelay > 0) introDelay -= Math.min(camDt, 0.1);
-      else introT = Math.min(1, introT + Math.min(camDt, 0.1) / INTRO_SECONDS);
-      const k = easeInOutCubic(introT);
-      // Swing round in an arc rather than a straight dolly.
-      const arc = Math.sin(k * Math.PI) * 2.5;
-      camera.position.lerpVectors(introFrom, camPos, k);
-      camera.position.x += arc;
-      lookCurrent.lerpVectors(introLookFrom, camLook, k);
-    } else {
-      const smooth = 1 - Math.exp(-camDt * 3.5);
-      camera.position.lerp(camPos, smooth);
-      lookCurrent.lerp(camLook, smooth);
-      // Doraemon says hello once the fly-in has landed (or once the loader is gone without it).
-      if (greetWait > 0) {
-        greetWait -= camDt;
-        if (greetWait <= 0) mascot.greet();
-      }
-    }
+    const smooth = 1 - Math.exp(-camDt * 3.5);
+    camera.position.lerp(camPos, smooth);
+    lookCurrent.lerp(camLook, smooth);
     camera.lookAt(lookCurrent);
+    // Doraemon says hello once the loader has faded.
+    if (greetWait > 0) {
+      greetWait -= camDt;
+      if (greetWait <= 0) mascot.greet();
+    }
 
     const ease = 1 - Math.exp(-dt * 3);
     rimUniforms.rimColor.value.lerp(rimTarget, ease);
