@@ -82,6 +82,19 @@ The **Music** button still turns it on and off.
 4. Press **Try it** to run the original and improved prompts side by side.
 5. Press **Use this** to load the improved prompt and score it again.
 
+## Deploy to Vercel
+
+The repo is ready for Vercel's zero-config Express support:
+
+- `server.js` imports `express` and default-exports the app (it only calls `listen` outside Vercel).
+- Vercel serves static files only from `public/`, so the build step (`npm run vercel-build`, set in
+  `vercel.json`) copies Three.js, marked and DOMPurify into `public/vendor/`.
+- `config/` and `prompts/` are bundled with the function automatically. On Vercel they are read-only:
+  edit them in the repo and redeploy.
+
+In the Vercel project settings, add the environment variable `GEMINI_API_KEY` (and optionally
+`GEMINI_MODEL`). The theme song is not in the repo, so the deployed site plays the generated music.
+
 ## Test
 
 ```bash

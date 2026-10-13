@@ -28,3 +28,6 @@ tmp/
 # Theme song you add yourself (copyrighted music must not be published)
 public/audio/*
 !public/audio/.gitkeep
+
+# Built by scripts/copy-vendor.mjs (Vercel build step)
+public/vendor/
